@@ -5,7 +5,7 @@ from scipy import stats
 from matplotlib import colors
 from astropy.convolution import Gaussian2DKernel
 from astropy.convolution import convolve, convolve_fft
-
+import pandas as pd
 
 # radius is around 1250 for GALEX data
 def nan_outside(radius, data):
