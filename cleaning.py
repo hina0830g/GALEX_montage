@@ -22,13 +22,13 @@ def nan_outside(radius, data):
     """
 
     # Create a grid of coordinates that match the dimension of the image
-    x, y = np.arange(0, len(data)), np.arange(0, len(data[0]))
+    x, y = np.arange(0, len(data)), np.arange(0, len(data))
     x_grid, y_grid = np.meshgrid(x, y)
 
     ## Calculate distances for all pixels at once
 
     # Find the center of the image in x and y
-    x_cent, y_cent = int(round(len(data) / 2)), int(round(len(data[0]) / 2))
+    x_cent, y_cent = int(round(len(data) / 2)), int(round(len(data) / 2))
     # Distance formula
     distances = np.sqrt((x_cent - x_grid) ** 2 + (y_cent - y_grid) ** 2)
     # Create a mask for pixels outside the circle
