@@ -171,7 +171,7 @@ def segmentation(cnt_data, npixels_value=10000, th_coeff=0.50):
         final_mask = canvas
 
     # Trim all the pixels that went over the circle
-    final_mask = zeros_outside(radius=1440, data=final_mask)
+    final_mask = zeros_outside(radius=1400, data=final_mask)
 
     bool_mask = np.where(final_mask != 0, 1, final_mask)
     fig, ax = plt.subplots()
