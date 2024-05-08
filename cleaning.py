@@ -39,6 +39,37 @@ def nan_outside(radius, data):
 
     return data
 
+def zeros_outside(radius, data):
+    """
+    ### input(s)
+    radius: radius of the circle (round 1400 for GALEX data).
+    pixels outside of this circle will be 
+    replaced with 0s
+
+    data: raw image (2d array) to be cleaned
+
+    ### output(s)
+    data: cleaned data
+    """
+
+    # Create a grid of coordinates that match the dimension of the image
+    x, y = np.arange(0, len(data)), np.arange(0, len(data))
+    x_grid, y_grid = np.meshgrid(x, y)
+
+    ## Calculate distances for all pixels at once
+
+    # Find the center of the image in x and y
+    x_cent, y_cent = int(round(len(data) / 2)), int(round(len(data) / 2))
+    # Distance formula
+    distances = np.sqrt((x_cent - x_grid) ** 2 + (y_cent - y_grid) ** 2)
+    # Create a mask for pixels outside the circle
+    mask = distances > radius
+    # Apply the mask ( masked pixels = nan )
+    print("r = ", radius, ", cleaned.")
+    data[mask] = 0
+
+    return data
+
 
 def gaussian_filter_2d(sigma, data):
     """
