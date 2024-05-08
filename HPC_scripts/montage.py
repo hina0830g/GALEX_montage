@@ -11,16 +11,14 @@ from astropy.io import fits
 import os
 import shutil
 from multiprocessing import Pool
+from glob import glob 
 
+home_dir = "/xdisk/hamden/hina0830/venv39"
 num_cpus=int(os.environ["SLURM_CPUS_ON_NODE"])
 print("Running a pool with %s workers"%num_cpus)
 
-# Swicth to the raw file directory
-path_init = os.getcwd() + '/raw_files'
-os.chdir( path_init )
-print('initial path (path_init): ', path_init)
-home = os.getcwd()
-
+os.chdir(home_dir + "/raw_files")
+print("current path: ", os.getcwd())
 today = date.today()
 print("Today's date:", today)
 
@@ -44,14 +42,41 @@ if args.pair_list:
         # Specify the coordinates using the input information
         c = SkyCoord(ra=RA*u.degree, dec=DEC*u.degree, frame='icrs')
         dir_name = str(today) + "-RA" + str(RA) + "-DEC" + str(DEC)
+        os.chdir(dir_name)
+        
+        # Switch to the new directory
+        path_init = os.getcwd()
+        os.chdir(path_init)
+        print("Path changed to: ", os.getcwd())
         
     except FileNotFoundError:
         print("Error")
+else:
+    dir_name = "2024-04-21-RA195-DEC21" # Manually enter a path
+    os.chdir(dir_name)
+    # Switch to the new directory
+    path_init = os.getcwd()
+    os.chdir(path_init)
+    print("Path changed to: ", os.getcwd())
+    c = SkyCoord(ra=195*u.degree, dec=21*u.degree, frame='icrs')
+    
+home = os.getcwd()
 
+# Create new directories
+#os.makedirs("cnt", exist_ok=True)
+#os.makedirs("rrhr", exist_ok=True)
+
+#os.chdir(path_init + "/cnt")
+#os.makedirs("raw", exist_ok=True)  # Creates cnt/raw
+
+#os.chdir(path_init + "/rrhr")
+#os.makedirs("raw", exist_ok=True)  # Creates rrhr/raw
+
+os.chdir( path_init )
 
 # These are the parameters defining the mosaic we want to make
 location = c.to_string('hmsdms')
-size     = 10.0
+size     = 7.0
 dataset  = "GALEX"
 workdir  = dir_name # where raw directory is locat$
 
@@ -71,48 +96,29 @@ print("Start up folder: " + home)
 
 print("Work directory: " + workdir, flush=True)
 
-def montage(type):
-    if type == "cnt":
-        os.chdir( home + '/' + workdir + '/' + "cnt")
-        print("cnt cwd: ", os.getcwd() )
-    elif type == "rrhr":
-        os.chdir( home + '/' + workdir + '/' + "rrhr" )
-        print("rrhr cwd: ", os.getcwd() )
+os.makedirs("projected", exist_ok=True)
+os.makedirs("diffs", exist_ok=True)
+os.makedirs("corrected", exist_ok=True)
 
-    os.makedirs("projected")
-    os.makedirs("diffs")
-    os.makedirs("corrected")
+# Create the FITS header for the mosaic
+rtn = mHdr(location,size,size, "region.hdr")
+print("mHdr: " + str(rtn), flush=True)
 
-    # Create the FITS header for the mosaic
-    rtn = mHdr(location,size,size, "region.hdr")
-    print("mHdr: " + str(rtn), flush=True)
+# Retreive archive images covering the region from the raw 
+# directory and then scan the images for their coverage metadata. 
+rtn = mImgtbl("raw", "rimages.tbl")
+print("mImgtbl (raw): " + str(rtn), flush=True)
 
-    # Retreive archive images covering the region from the raw 
-    # directory and then scan the images for their coverage metadata. 
-    rtn = mImgtbl("raw", "rimages.tbl")
-    print("mImgtbl (raw): " + str(rtn), flush=True)
+# Reproject the original images to the frame of the 
+# output FITS header we created
+rtn = mProjExec("raw", "rimages.tbl", "region.hdr", projdir="projected")
+print("mProjExec: " + str(rtn), flush=True)
 
-    # Reproject the original images to the frame of the 
-    # output FITS header we created
-    rtn = mProjExec("raw", "rimages.tbl", "region.hdr", projdir="projected")
-    print("mProjExec: " + str(rtn), flush=True)
+mImgtbl("projected", "pimages.tbl")
+print("mImgtbl (projected): " + str(rtn), flush=True)
 
-    mImgtbl("projected", "pimages.tbl")
-    print("mImgtbl (projected): " + str(rtn), flush=True)
-
-    # Coadd the projected images without background correction.
-    # This step is just to illustrate the need for background correction
-    # and can be omitted
-    rtn = mAdd("projected", "pimages.tbl", "region.hdr", "uncorrected.fits", coadd = 3)
-    print("mAdd: " + str(rtn), flush=True)
-
-    # Read and return the result (mosaic)
-    hdu = fits.open("uncorrected.fits")
-    data = (hdu[0].data).astype('float64')
-
-    return data
-
-if __name__=="__main__":
-    with Pool(num_cpus) as p:
-        type_list = ["cnt", "rrhr"]
-        data = p.map(montage, type_list)
+# Coadd the projected images without background correction.
+# This step is just to illustrate the need for background correction
+# and can be omitted
+rtn = mAdd("projected", "pimages.tbl", "region.hdr", "uncorrected.fits", coadd = 0)
+print("mAdd: " + str(rtn), flush=True)
