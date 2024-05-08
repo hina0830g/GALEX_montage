@@ -15,6 +15,15 @@ Images are queried from [*GALEX sky survey archive*](https://archive.stsci.edu/m
 - Julia Environment 
 - HPC Environment (I request 470 GB of RAM, however, this can be reduced)
 
+First, create a Python virtual environment for Python 3.8 or newer in an HPC system:  
+
+```
+module load python/<version>
+virtualenv --system-site-packages </path/to/virtual/env>
+```
+Then activate the virtual environment (source venv/bin/activate).
+
+
 To run the program, clone this repository by running the following command:
 
 ```
@@ -30,17 +39,6 @@ sudo python xx.py install
 
 <h2 align="center"> Getting Started </h2>
 
-
-- **Create a Python virtual environment for Python 3.8 or newer**
-
-Run the following commands to create a new Python virtual environment in an HPC system:  
-
-```
-module load python/<version>
-virtualenv --system-site-packages </path/to/virtual/env>
-```
-Then activate the virtual environment (source venv/bin/activate).
-
 - **Create/Modify the input file**  
 
 An input file should include the target coordinates.  Each line should include 2 integers with a single space in-between, Right Ascension followed by Declination in degrees. 
@@ -53,9 +51,7 @@ Example:
 ```
 This would submit an array job at RA=195, DEC=21 & RA=195, DEC=21. 
 
-- **argparse.slurm**
-
-Change the path to your input file path:   
+- **Change the path to your input file path**     
 
 CurrentCoordinates="$( sed "${SLURM_ARRAY_TASK_ID}q;d" **/path/to/input** )"
 
