@@ -65,12 +65,13 @@ if args.pair_list:
     except FileNotFoundError:
         print("Error")
 
-#os.chdir("2024-04-21-RA195-DEC21")
+# os.chdir("2024-04-21-RA195-DEC21")
 print("New location: ", os.getcwd())
 
+
 def make_mask(data):
-    radius = 1400 # Default. Should not be changed
-    
+    radius = 1400  # Default. Should not be changed
+
     # Create a grid of coordinates
     x, y = np.arange(0, int(len(data))), np.arange(0, int(len(data[0])))
     x_grid, y_grid = np.meshgrid(x, y)
@@ -81,7 +82,7 @@ def make_mask(data):
 
     # Create a mask for pixels outside the circle
     mask = distances > radius
-    
+
     return mask
 
 
@@ -101,7 +102,7 @@ def process_file(filename):
         # Apply Gaussian filter to intensity file
         kernel = make_2dgaussian_kernel(7.0, size=21)  # FWHM = 7
         data = convolve(data, kernel)
-    
+
     # Replace the outer pixels with nans
     mask = make_mask(data)
     data[mask] = np.nan
@@ -113,35 +114,44 @@ def process_file(filename):
 
     return data
 
+
 def reproject(file_tuple):
     fn_cnt, fn_flags = file_tuple
     print("Processing: ", fn_cnt, fn_flags)
     hdu1 = fits.open(fn_cnt)[0]
-    hdu2 = fits.open(fn_flags)[0] # flag, 480 by 480
-    
-    array, footprint = reproject_interp(hdu2, hdu1.header)     # reproject flag file to cnt (3840 by 3840)
+    hdu2 = fits.open(fn_flags)[0]  # flag, 480 by 480
+
+    array, footprint = reproject_interp(
+        hdu2, hdu1.header
+    )  # reproject flag file to cnt (3840 by 3840)
     print(np.shape(array))
-    
-    print(fn_flags.removesuffix('.fits') + '_wcs.fits', " reprojected and saved. ")
-    fits.writeto(fn_flags.removesuffix('.fits') + '_wcs.fits', array, hdu1.header, overwrite=True)
-    
+
+    print(fn_flags.removesuffix(".fits") + "_wcs.fits", " reprojected and saved. ")
+    fits.writeto(
+        fn_flags.removesuffix(".fits") + "_wcs.fits", array, hdu1.header, overwrite=True
+    )
+
     return array
 
 
 if __name__ == "__main__":
     with Pool(num_cpus) as p:
         # Retrieves each type of files in the directory
-        fn = sorted(glob("*cnt.fits")) + sorted(glob("*rrhr.fits")) + sorted(glob("*int.fits"))
+        fn = (
+            sorted(glob("*cnt.fits"))
+            + sorted(glob("*rrhr.fits"))
+            + sorted(glob("*int.fits"))
+        )
         print("nans filename: ", fn)
         # Nan the outside
         output = p.map(process_file, fn)
-        
-        fn_reproject =  sorted(glob("*cnt.fits")) + sorted(glob("*flags.fits"))
-        
-        mapped_argument_reproject = list(zip(sorted(glob("*cnt.fits")), sorted(glob("*flags.fits"))))
-        
+
+        fn_reproject = sorted(glob("*cnt.fits")) + sorted(glob("*flags.fits"))
+
+        mapped_argument_reproject = list(
+            zip(sorted(glob("*cnt.fits")), sorted(glob("*flags.fits")))
+        )
+
         print("mapped_argument_reproject: ", mapped_argument_reproject)
         # Reproject flag files
         output_reproject = p.map(reproject, mapped_argument_reproject)
-        
-        
