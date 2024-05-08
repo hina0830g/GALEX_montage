@@ -13,12 +13,14 @@ from astropy.coordinates import SkyCoord
 import glob
 from sh import gunzip
 
+home_dir = '/xdisk/hamden/hina0830/venv39'
+
 # Input here:
-r = 5
-project_lis = ['AIS', 'GII', 'CAI', 'NGS', 'DIS', 'CAI', 'MIS']
+r = 4.0
+project_lis = ['AIS','NGS','DIS','MIS'] 
 
 # Swicth to the raw file directory
-path_init = os.getcwd() + '/raw_files'
+path_init = home_dir  + '/raw_files'
 os.chdir( path_init )
 print('initial path (path_init): ', path_init)
 
@@ -58,7 +60,6 @@ if args.pair_list:
     except FileNotFoundError:
         print("Error")
  
-project_lis = ['AIS', 'GII', 'CAI', 'NGS', 'DIS', 'CAI', 'MIS']
 
 def coord_query(coord, radius, project):
     # Runs GALEX coordinate query 
@@ -71,9 +72,10 @@ def coord_query(coord, radius, project):
     # Only keeps the fd files;
     data_products = data_products[(data_products['productFilename'].str.contains('-fd'))]
     DataProduct_final = data_products[
-    ((data_products['productFilename'].str.contains('_000' + r'\d{1}' + '-' )) == False) &
-    ((data_products['productFilename'].str.contains('_000' + r'\d{1}' + '_' )) == False) &
-    (data_products['productFilename'].str.endswith(('-cnt.fits.gz', '-rrhr.fits.gz', '-skybg.fits.gz', '-objmask.fits.gz', 'fd-ncat.fits.gz')))
+    ((data_products['productFilename'].str.contains('_00' + r'\d{1}' + r'\d{1}' + '-' )) == False) &
+    ((data_products['productFilename'].str.contains('_00' + r'\d{1}' + r'\d{1}' + '_' )) == False) &
+    #(data_products['productFilename'].str.endswith(('-cnt.fits.gz', '-rrhr.fits.gz', '-int.fits.gz')))
+    (data_products['productFilename'].str.endswith(('-cnt.fits.gz', '-rrhr.fits.gz', '-skybg.fits.gz', '-int.fits.gz', 'flags.fits.gz')))
     ]    
 
     print(len(DataProduct_final), 'files total per type available to download')
@@ -88,17 +90,8 @@ def download_dp(data_products):
     # Download selected MIS files
     manifest = Observations.download_products(data_products)
     print("Installed: " , data_products['productFilename'])
+    print(data_products['project'])
     return path_new
-
-def download_dp(data_products):
-
-    # Convert data frame back to QTable
-    data_products = QTable.from_pandas(data_products)
-    # Download selected MIS files
-    manifest = Observations.download_products(data_products)
-    print("Installed: " , data_products['productFilename'])
-    return path_new
-
 
 def move_files(path_new):
     ext = '/mastDownload/GALEX'
