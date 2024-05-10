@@ -1,6 +1,17 @@
 <h1 align="center"> 🌌 Space Image Processing with High-Performance Computing 🌌 </h1>
 
-This is a Python & Julia based astronomical image processing project, parallelized and designed to run in an HPC environment. We aim to remove all bright sources from individual images and create an all-sky map of FUV galactic dust. The final map will be stored as  a hierarchy of FITS files called HiPS (Hierarchical Progressive Survey). 
+This is a Python & Julia based astronomical image processing project, parallelized and designed to run in an HPC environment. We developed a multi-step algorithm that aims to identify all bright objects (galaxies, stars, and other extended/saturated sources) from individual images and cleanly fill them in with predicted background pixels. Processed images are montaged together to create an all-sky map of FUV galactic dust. The final map will be stored as a hierarchy of FITS files called HiPS (Hierarchical Progressive Survey). 
+
+<h2 align="center"> Project Goals </h2>
+
+- Updating and improving the previously published work (Hamden et al 2013); optimized for HPC, written in a more modern language, multi-step approach of object identification, and usage of machine learning
+- Criteria-based query for FUV data extraction
+- Identification of large celestial objects (extended sources and galaxies) via segmentation
+- Identification of remaining point sources via 2D Gaussian fit 
+- Clean removal and infill of the identified sources 
+- Creation of Far UV all-sky map for public access and future science
+- Parallelizing the scripts for faster and more efficient image processing to process large data
+- Usage argparse to pass a list of coordinates to HPC server and automate the slurm job schedulings
 
 <h2 align="center"> Dataset </h2>
 
@@ -29,13 +40,6 @@ To run the program, clone this repository by running the following command:
 ```
 git clone dev https://github.com/hina0830g/GALEX_montage.git
 ```
-
-Then run the following line:
-
-``
-sudo python xx.py install
-``
-
 
 <h2 align="center"> Getting Started </h2>
 
@@ -80,21 +84,21 @@ This code reads an input file (a list of coordinates) and performs a criteria-ba
 - [**preprocessing.py**](https://github.com/hina0830g/GALEX_montage/blob/dev/HPC_scripts/preprocessing.py)
 This code preprocesses 3 types of files, cnt.fits, rrhr.fits, and int.fits. 0s in all files are replaced with Nans to speed up the future calculation. These pixels are found outside the r~1400 [pix] of the images. Negative pixels in rrhr and int files also get replaced with Nans. Finally, a Gaussian filter is applied to int.fits files to smooth out the images before running segmentation. The default parameters for the Gaussian filter is fwhm=7 and kernel size=21 pixels.
 
-- [**mask_step1_ver3.py**] file name tbd  
+- [**object_detection.py**] file name tbd  
 The primary purposes of this code are to:
 1. Perform segmentation on the images to identify large, bright objects (extended sources + galaxies) and create masks that cover them (function segmentation)
 2. Generate Poisson noise from the background values and fill in the masked region to eliminate the bright sources (function segmentation)
 3. Run a star finder to identify the location of the remaining bright sources; these are point sources aka stars. It stores the list of coordinates as a .pkl file and masked image and star mask as FITS. (function starfinder)  
-4. 
+
 In every step, flags.fits files are used in order to flag artifacts (=bad pixels).
 
 - [**pointsource_infill.jl**](https://github.com/hina0830g/GALEX_montage/blob/dev/HPC_scripts/pointsource_infill.jl)
 This code uses a Julia infill package CloudClean to fill in point sources and artifact pixels that were flagged in the previous step.
 
 - [**post processing.py**](https://github.com/hina0830g/GALEX_montage/blob/dev/HPC_scripts/)
-This code cleans the output images of point_source_infill.jl. This eliminates any undesired pixels that lay outside of the actual images and transfers the files.
+This code cleans the output images of point_source_infill.jl. It eliminates any undesired pixels outside of the actual images and transfers the files.
 
-- [**montage.py.py**](https://github.com/hina0830g/GALEX_montage/blob/dev/HPC_scripts/montage.py)  
+- [**montage.py**](https://github.com/hina0830g/GALEX_montage/blob/dev/HPC_scripts/montage.py)  
 This code combines all the processed images to create a large mosaic. The primary function it uses is the coadd function from MontagePy and takes the mean for the regions where images overlap. The mosaic is saved as uncorrect.fits.
 
 - [**Cleaning.py**](https://github.com/hina0830g/GALEX_montage/blob/dev/cleaning.py)  
