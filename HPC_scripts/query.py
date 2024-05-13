@@ -74,7 +74,6 @@ def coord_query(coord, radius, project):
     DataProduct_final = data_products[
     ((data_products['productFilename'].str.contains('_00' + r'\d{1}' + r'\d{1}' + '-' )) == False) &
     ((data_products['productFilename'].str.contains('_00' + r'\d{1}' + r'\d{1}' + '_' )) == False) &
-    #(data_products['productFilename'].str.endswith(('-cnt.fits.gz', '-rrhr.fits.gz', '-int.fits.gz')))
     (data_products['productFilename'].str.endswith(('-cnt.fits.gz', '-rrhr.fits.gz', '-skybg.fits.gz', '-int.fits.gz', 'flags.fits.gz')))
     ]    
 
