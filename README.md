@@ -84,7 +84,7 @@ import cleaning as cl
 <h2 align="center"> Codes </h2>
 
 - [**argparse.slurm**](https://github.com/hina0830g/GALEX_montage/blob/dev/HPC_scripts/argparse.slurm)  
-SLURM script for submitting an array job in the following order: query.py -> preprocessing.py -> mask_step1_ver3.py
+SLURM script for submitting an array job in the following order: query.py -> preprocessing.py -> object_detection.py
 
 - [**query.py**](https://github.com/hina0830g/GALEX_montage/blob/dev/HPC_scripts/query.py)  
 This code reads an input file (a list of coordinates) and performs a criteria-based query at each coordinate. A new directory is created for each coordinate, and all the downloaded files get transferred to the designated directory.
@@ -92,7 +92,7 @@ This code reads an input file (a list of coordinates) and performs a criteria-ba
 - [**preprocessing.py**](https://github.com/hina0830g/GALEX_montage/blob/dev/HPC_scripts/preprocessing.py)
 This code preprocesses 3 types of files, cnt.fits, rrhr.fits, and int.fits. 0s in all files are replaced with Nans to speed up the future calculation. These pixels are found outside the r~1400 [pix] of the images. Negative pixels in rrhr and int files also get replaced with Nans. Finally, a Gaussian filter is applied to int.fits files to smooth out the images before running segmentation. The default parameters for the Gaussian filter is fwhm=7 and kernel size=21 pixels.
 
-- [**object_detection.py**] file name tbd  
+- [**object_detection.py**](https://github.com/hina0830g/GALEX_montage/blob/dev/HPC_scripts/object_detection.py) 
 The primary purposes of this code are to:
 1. Perform segmentation on the images to identify large, bright objects (extended sources + galaxies) and create masks that cover them (function segmentation)
 2. Generate Poisson noise from the background values and fill in the masked region to eliminate the bright sources (function segmentation)
