@@ -43,6 +43,9 @@ git clone dev https://github.com/hina0830g/GALEX_montage.git
 
 <h2 align="center"> Getting Started </h2>
 
+- **Create a new new directory "raw_files" in your virtual environment**  
+query.py will try to locate your raw_files directory and make a new directory inside of it where all the files will be downlaoded. The format of the folder name is DATE-RAvalue-DECvalue
+
 - **Create/Modify the input file**  
 
 An input file should include the target coordinates.  Each line should include 2 integers with a single space in-between, Right Ascension followed by Declination in degrees. 
