@@ -155,7 +155,7 @@ def move_files(path_new):
 if __name__=="__main__":
     # Run query & extract data product
     DataProduct_final = coord_query(c, r, project_lis)
-
+    # Download the files
     path_new = download_dp(DataProduct_final)
         
     # Organize the files
