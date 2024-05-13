@@ -59,9 +59,13 @@ Example:
 ```
 This would submit an array job at RA=195, DEC=21 & RA=195, DEC=21. 
 
-- **Change the path to your input file path**     
+- **Open argparse.slurm and change the path to your input file path**     
 
 CurrentCoordinates="$( sed "${SLURM_ARRAY_TASK_ID}q;d" **/path/to/input** )"
+
+- **Open query.py and preprocessing.py and change the home directory path**    
+
+home_dir = "path/to/your/virtualenvironment"
 
 - **import packages**
 
