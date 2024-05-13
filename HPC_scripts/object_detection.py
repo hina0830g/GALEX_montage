@@ -120,7 +120,7 @@ def segmtantion(file_tuple):
 
     # Read the files (the rest) and get data as arrays
     #rrhr_data, skybg_data, int_data, flags_data = get_data(rrhr_file), get_data(skybg_file), get_data(int_file), get_data(flags_file)
-    #cnt_data, rrhr_data, skybg_data, int_data, flags_data = fits.getdata(cnt_file).astype('float64'), fits.getdata(rrhr_file).astype('float64'), fits.getdata(skybg_file).astype('float64'), fits.getdata(int_file).astype('float64'), fits.getdata(flags_file).astype('float64')
+    cnt_data, rrhr_data, skybg_data, int_data, flags_data = fits.getdata(cnt_file).astype('float64'), fits.getdata(rrhr_file).astype('float64'), fits.getdata(skybg_file).astype('float64'), fits.getdata(int_file).astype('float64'), fits.getdata(flags_file).astype('float64')
 
     ### The default parameters ###
     edge_thickness = 500 # Trim 500 (blank) pixels on each side
