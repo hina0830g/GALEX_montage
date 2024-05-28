@@ -13,6 +13,10 @@ import shutil
 from multiprocessing import Pool
 from glob import glob 
 
+import sys
+sys.path.append("/xdisk/hamden/hina0830/venv39/")
+import cleaning as cl
+
 home_dir = "/xdisk/hamden/hina0830/venv39"
 num_cpus=int(os.environ["SLURM_CPUS_ON_NODE"])
 print("Running a pool with %s workers"%num_cpus)
@@ -52,31 +56,42 @@ if args.pair_list:
     except FileNotFoundError:
         print("Error")
 else:
-    dir_name = "2024-04-21-RA195-DEC21" # Manually enter a path
+    dir_name = "2024-05-15-RA180-DEC12" # Manually enter a path
     os.chdir(dir_name)
     # Switch to the new directory
     path_init = os.getcwd()
     os.chdir(path_init)
     print("Path changed to: ", os.getcwd())
-    c = SkyCoord(ra=195*u.degree, dec=21*u.degree, frame='icrs')
+    c = SkyCoord(ra=180*u.degree, dec=12*u.degree, frame='icrs')
     
 home = os.getcwd()
 
-# Create new directories
-#os.makedirs("cnt", exist_ok=True)
-#os.makedirs("rrhr", exist_ok=True)
+# Clean the edge of draw.fits and save them using headers from intensity files
+draw_files, int_files = sorted(glob("*draw.fits")), sorted(glob("*-int_Pinfilled_trimmed.fits"))
+print(len(draw_files), len(int_files))
 
-#os.chdir(path_init + "/cnt")
-#os.makedirs("raw", exist_ok=True)  # Creates cnt/raw
+os.makedirs("raw", exist_ok=True)
 
-#os.chdir(path_init + "/rrhr")
-#os.makedirs("raw", exist_ok=True)  # Creates rrhr/raw
+for i in range(len(draw_files)):
+    hdu = fits.open(int_files[i])
+    data = fits.getdata(draw_files[i])
+    
+    result_cleaned = cl.nan_outside(1400, data)
+    hdu[0].data = result_cleaned 
+    
+    filename = draw_files[i].removesuffix(".fits") + "_cleaned.fits"
+    
+    hdu.writeto(
+    path_init + "/raw/" + filename,
+    overwrite=True,
+)
+
 
 os.chdir( path_init )
 
 # These are the parameters defining the mosaic we want to make
 location = c.to_string('hmsdms')
-size     = 7.0
+size     = 8.0
 dataset  = "GALEX"
 workdir  = dir_name # where raw directory is locat$
 
