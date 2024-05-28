@@ -119,11 +119,11 @@ def reproject(file_tuple):
     hdu1 = fits.open(fn_cnt)[0]
     hdu2 = fits.open(fn_flags)[0] # flag, 480 by 480
     
-    array, footprint = reproject_interp(hdu2, hdu1.header)     # reproject flag file to cnt (3840 by 3840)
+    array, footprint = reproject_interp(hdu2, hdu1.header, order = "nearest-neighbor")  # reproject flag file to cnt (3840 by 3840) # order = " reproject_interp "
     print(np.shape(array))
     
     print(fn_flags.removesuffix('.fits') + '_wcs.fits', " reprojected and saved. ")
-    fits.writeto(fn_flags.removesuffix('.fits') + '_wcs.fits', array, hdu1.header, overwrite=True)
+    fits.writeto(fn_flags.removesuffix('.fits') + '_wcs_ver2.fits', array, hdu1.header, overwrite=True)
     
     return array
 
