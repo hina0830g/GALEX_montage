@@ -17,15 +17,12 @@ using Plots
 using Pickle
 using Glob
 
-path_init = "/xdisk/hamden/hina0830/venv39/raw_files/2024-04-21-RA195-DEC21" 
-coord_fn, out_fn, bimage_fn, orig_fn = sort(glob("*_coord.pkl", path_init), rev=false), sort(glob("*_masked.fits", path_init), rev=false), sort(glob("*_mask.fits", path_init), rev=false), sort(glob("*-cnt_Pinfilled_trimmed.fits", path_init), rev=false)
+path_init = "/xdisk/hamden/hina0830/venv39/raw_files/2024-05-15-RA180-DEC12" 
+coord_fn, out_fn, bimage_fn, orig_fn = sort(glob("*_coord.pkl", path_init), rev=false), sort(glob("*_masked.fits", path_init), rev=false), sort(glob("*_mask.fits", path_init), rev=false), sort(glob("*-int_Pinfilled_trimmed.fits", path_init), rev=false)
 println(length(coord_fn))
 
 cd(path_init)
 
-#mkdir("raw")
-
-path_final = path_init * "/raw"
 
 # Function to print thread ID
 function thread_print(string)
@@ -70,6 +67,8 @@ function thread_print(string)
     # Run the infilling algorithm 
     star_stats = proc_discrete(x_locs.+1 , y_locs.+1 , out_image, bimage_bool, Np=Np, rlim=Inf, tilex=8, ftype=64, widx=widx, seed=2022, ndraw=ndraw0);
     
+    println("check point 1 (proc_discrete done)")
+   
     # Open the original FITS file
     f_original = FITS(filename_original, "r")
 
@@ -77,6 +76,8 @@ function thread_print(string)
     data = read(f_original[1])
     mean = star_stats[1]
     draw = star_stats[2][:, :, 1]
+    
+    println("check point2 (draw and mean defined)")
 
     # Update the header to reflect the changes in the data
     header = read_header(f_original[1])
@@ -85,8 +86,6 @@ function thread_print(string)
 
     # Close the original FITS file
     close(f_original)
-    
-    cd(path_final) # change the path to "raw"
 
     # Create a new FITS file for writing with the modified data and header
     new_filename = replace(filename_original, ".fits" => "_Np$(Np)_widx$(widx)_mean.fits" ) 
@@ -102,8 +101,8 @@ function thread_print(string)
 
     # Close the new FITS file
     close(f_modified)
-
-    cd(path_init)
+    
+    println("check point3 (files closed)")
     
 end
 
