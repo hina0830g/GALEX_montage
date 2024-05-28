@@ -42,27 +42,32 @@ if args.pair_list:
     RA, DEC = map(int, args.pair_list)
     print("RA:", RA)
     print("DEC:", DEC)
+    c = SkyCoord(ra=RA*u.degree, dec=DEC*u.degree, frame='icrs')
+    
     try:
-        # Specify the coordinates using the input information
-        c = SkyCoord(ra=RA*u.degree, dec=DEC*u.degree, frame='icrs')
+        # Switch to the new directory
         dir_name = str(today) + "-RA" + str(RA) + "-DEC" + str(DEC)
         os.chdir(dir_name)
-        
-        # Switch to the new directory
         path_init = os.getcwd()
-        os.chdir(path_init)
-        print("Path changed to: ", os.getcwd())
+        print("Path changed to: ", os.getcwd())    
         
     except FileNotFoundError:
         print("Error")
+        
 else:
-    dir_name = "2024-05-15-RA180-DEC12" # Manually enter a path
-    os.chdir(dir_name)
     # Switch to the new directory
+    dir_name = "2024-05-15-RA180-DEC12" # Manually enter a path
+
+    # Get coordinates from the directory name
+    i = dir_name.find("RA") # Find the starting position of "RA"
+    RA_string, DEC_string = astronomy_string[i:].split('-')
+    RA, DEC = int(RA_string.removeprefix("RA")), int(DEC_string.removeprefix("DEC"))
+    
+    c = SkyCoord(ra=RA*u.degree, dec=DEC*u.degree, frame='icrs')
+    
+    os.chdir(dir_name)
     path_init = os.getcwd()
-    os.chdir(path_init)
     print("Path changed to: ", os.getcwd())
-    c = SkyCoord(ra=180*u.degree, dec=12*u.degree, frame='icrs')
     
 home = os.getcwd()
 
