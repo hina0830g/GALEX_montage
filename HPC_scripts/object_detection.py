@@ -90,13 +90,8 @@ if args.pair_list:
     except FileNotFoundError:
         print("Error")
 
-#os.chdir("2024-04-21-RA195-DEC21")
+#os.chdir("2024-05-14-RA180-DEC12")
 print("New location: ", os.getcwd())
-
-def get_data(filename):
-    hdu = fits.open(filename)
-    data = (hdu[0].data).astype("float64")
-    return data
 
 
 def segmtantion(file_tuple):
@@ -113,56 +108,55 @@ def segmtantion(file_tuple):
     hdr = hdu[0].header
     
     fn_current = cnt_file.removesuffix('-cnt_nan.fits') # fn as filename
-    project_name =  hdr['MPSTYPE']
-    print(fn_current, hdr['EXPTIME'], hdr['MPSTYPE'])
     
-    #cnt_data = (hdu[0].data).astype("float64")
-
-    # Read the files (the rest) and get data as arrays
-    #rrhr_data, skybg_data, int_data, flags_data = get_data(rrhr_file), get_data(skybg_file), get_data(int_file), get_data(flags_file)
-    cnt_data, rrhr_data, skybg_data, int_data, flags_data = fits.getdata(cnt_file).astype('float64'), fits.getdata(rrhr_file).astype('float64'), fits.getdata(skybg_file).astype('float64'), fits.getdata(int_file).astype('float64'), fits.getdata(flags_file).astype('float64')
-
+    exptime, project_name = hdr['EXPTIME'], hdr['MPSTYPE'] 
+    print(fn_current, exptime, project_name)
+    
     ### The default parameters ###
     edge_thickness = 500 # Trim 500 (blank) pixels on each side
     radius = 1400
     sigma = 3.0
     npixels_value = 500
     
-    if project_name == "AIS":
+    # If statements to determine the coefficient based on 
+    # exposure time
+    if exptime >= 30000: # DIS
+        th_coeff = 15
+    elif exptime >= 1500: # MIS & NGS
+        th_coeff = 10
+    elif exptime >= 100: # "AIS
         th_coeff = 6
-    elif project_name == "MIS":
-        th_coeff = 10
-    elif project_name == "NGS":
-        th_coeff = 10
-    elif project_name == "DIS":
-        th_coeff = 13
     else:
-        print("project name outlier at ", fn_current)
-        th_coeff = 10 # Change later
+        print("exception; exposure time is: ", exptime)
+        th_coeff = 6
         
     #int_data[flags_data  >= 256] = np.nans
      
-    mask = ps.segmentation_ver2(fn_current, int_data, npixels_value, th_coeff) # Perform segmentations on large sources
+    mask = ps.segmentation(fn_current, int_data, npixels_value, th_coeff) # Perform segmentations on large sources
     print("ps.segmentation finished")
 
     cnt_noise = ps.poisson_noise(cnt_data, rrhr_data, mask, skybg_data) # Perform Poisson infill
     print("ps.poisson_noise finished ")
     
     # Nan out bad pixels?
-    cnt_noise[flags_data  >= 256] = np.nan
+    #cnt_noise[flags_data  >= 256] = np.nan
     
     # Trim each side (empty pixels) of the array by the edge_thickness (=500pix)
     cnt_infilled_trimmed = cnt_noise[edge_thickness:len(cnt_noise)-edge_thickness, edge_thickness:len(cnt_noise[0])-edge_thickness]
     rrhr_trimmed = rrhr_data[edge_thickness:len(rrhr_data)-edge_thickness, edge_thickness:len(rrhr_data[0])-edge_thickness]
-
+    
+    #flags_trimmed = flags_data[edge_thickness:len(flags_data)-edge_thickness, edge_thickness:len(flags_data[0])-edge_thickness]
+    
     # Apply Gaussian filter and clean the edges
     final_cnt = cl.combined(sigma=sigma, radius=radius, data=cnt_infilled_trimmed)
     print("cl.combined finished")
+    
+    #final_cnt[flags_trimmed  >= 256] = np.nan
 
     # Save the new files
     hdu[0].data = final_cnt
     hdu.writeto(
-        cnt_file.removesuffix("_preprocessed.fits") + "Pinfilled_trimmed.fits",
+        cnt_file.removesuffix("_preprocessed.fits") + "_Pinfilled_trimmed.fits",
         overwrite=True,
     )
     print(f"Processing completed for {cnt_file}")
@@ -173,6 +167,51 @@ def segmtantion(file_tuple):
         overwrite=True,
     )
     return cnt_data
+
+def starfinder_new(file_tuple):
+    cnt_file, int_file, flags_file, rrhr_file = file_tuple
+    
+    edge_thickness = 500 # Trim 500 (blank) pixels on each side
+    mask_size = 16 # size of mask for each star in pixels
+
+    th_coeff = 25.0 # for AIS
+    DAO_fwhm = 10.385
+    
+    hdu = fits.open(cnt_file)
+    
+    cnt_data, rrhr_data, flags_data  = (hdu[0].data).astype("float64"), fits.getdata(rrhr_file).astype('float64'), fits.getdata(flags_file).astype('float64')
+    
+    flags_data = flags_data[edge_thickness:len(flags_data)-edge_thickness, edge_thickness:len(flags_data[0])-edge_thickness]
+    
+    divided_data = cnt_data/rrhr_data 
+
+    divided_data[flags_data  != 0] = np.nan # flag the data 
+    # Drops nans
+    divided_data[np.isnan(divided_data)] = 0 # nan = 0
+
+    masked_data, mask_data, coord_lis = ps.psfinder(divided_data, flags_data, th_coeff, DAO_fwhm, mask_size)
+
+    # --- Save files here ---
+    
+    with open( cnt_file_int.removesuffix('Pinfilled_trimmed.fits') + str(len(coord_lis)) + '_coord.pkl', "wb") as f:
+        pickle.dump(coord_lis,f)
+        
+    # Save masked data (out_image)
+    hdu[0].data = divided_data
+    hdu.writeto( cnt_file_int, overwrite=True)
+    print( cnt_file.replace('cnt', 'int'), " saved.")
+
+    # Save masked data (out_image)
+    hdu[0].data = masked_data
+    hdu.writeto( cnt_file_int.removesuffix('.fits') + '_' + str(len(coord_lis)) + '_masked.fits', overwrite=True)
+    print(cnt_file_int.removesuffix('.fits') + '_' + str(len(coord_lis)) + '_masked.fits', " saved.")
+
+    # Save mask file (bimage)
+    hdu[0].data = mask_data
+    hdu.writeto( cnt_file_int.removesuffix('Pinfilled_trimmed.fits') + str(len(coord_lis)) + '_mask.fits', overwrite=True)
+    print(cnt_file_int.removesuffix('Pinfilled_trimmed.fits') + str(len(coord_lis)) + '_mask.fits', " saved.")
+    
+    return mask_data
 
 def starfinder(file_tuple):
     cnt_file, int_file, flags_file, rrhr_file = file_tuple
@@ -191,14 +230,14 @@ def starfinder(file_tuple):
     
     rrhr_data = fits.getdata(rrhr_file).astype('float64') 
     
-    divided_data = data/rrhr_data
+    divided_data = data/rrhr_data 
 
-    mean, median, std = sigma_clipped_stats(divided_data)  
-    print((mean, median, std))  
-
-    #divided_data[flags_data  != 0] = np.nan # flag the data 
+    divided_data[flags_data  != 0] = np.nan # flag the data 
     # Drops nans
-    #divided_data[np.isnan(divided_data)] = 0 # nan = 0
+    divided_data[np.isnan(divided_data)] = 0 # nan = 0
+    
+    mean, median, std = sigma_clipped_stats(divided_data)  
+    print((mean, median, std)) 
 
     daofind = DAOStarFinder(fwhm=DAO_fwhm, threshold=th_coeff*std) # fwhm=3.0, 3.0*std 
     sources = daofind(divided_data - median)
@@ -282,7 +321,7 @@ def starfinder(file_tuple):
         df = tbl.to_pandas()
 
         # Find the index of the row with the largest value of "semimajor_sigma"
-        indices_to_drop = df[df['semimajor_sigma'] > 55].index
+        indices_to_drop = df[df['semimajor_sigma'] > 50].index
 
         # Drop the row using the index
         df.drop(indices_to_drop, inplace=True)
@@ -295,38 +334,13 @@ def starfinder(file_tuple):
 
         # Loop over ellipses and draw them onto the mask
         for i in range(len(tbl)):
-            ellipse = Ellipse((tbl['xcentroid'][i], tbl['ycentroid'][i]), 
-                              width=10 * tbl['semimajor_sigma'][i],  
-                              height=10 * tbl['semiminor_sigma'][i], 
-                              angle=tbl['orientation'][i], edgecolor = 'red', facecolor= 'none')
-
-            # Convert the ellipse into a binary mask
-            x, y = ellipse.get_verts().T
-            x_min, x_max = int(x.min()), int(x.max())
-            y_min, y_max = int(y.min()), int(y.max())
-            xx, yy = np.meshgrid(np.arange(x_min, x_max), np.arange(y_min, y_max))
-            ellipse_mask = ellipse.contains_points(np.vstack((xx.flatten(), yy.flatten())).T).reshape((y_max-y_min, x_max-x_min))
-
-            # Get the bounding box of the ellipse in the original image coordinates
-            x0, y0 = max(0, int(tbl['xcentroid'][i] - 0.5 * ellipse.width)), max(0, int(tbl['ycentroid'][i] - 0.5 * ellipse.height))
-            x1, y1 = min(mask_shape[1], x0 + ellipse_mask.shape[1]), min(mask_shape[0], y0 + ellipse_mask.shape[0])
-
-            # Add the ellipse mask to the main mask
-            mask[y0:y1, x0:x1] += ellipse_mask[:y1-y0, :x1-x0]
-
-            #ax.add_artist(ellipse)
-
             x, y = int(tbl['xcentroid'][i]), int(tbl['ycentroid'][i])
-
             # Find the distance between the center of the image and the star
             star_dist = np.sqrt((x_cent - x) ** 2 + (y_cent - y) ** 2)
 
             if star_dist < 1400: # Save the coordinates if the coordinates are inside the circle
                 coord = [int(tbl['xcentroid'][i]), int(tbl['ycentroid'][i])]
                 coord_lis.append(coord)
-
-                print("artifacts coord: ", coord)
-
 
     # Save a list of coordinates of stars
     
@@ -385,5 +399,5 @@ if __name__ == "__main__":
 
         if len(fn_cnt_infilled) == len(fn_int) == len(fn_flags) == len(fn_rrhr_trimmed):
             print(len(fn_cnt_infilled), "files per each")
-            output = p.map(starfinder, mapped_argument_star)
+            output = p.map(starfinder_new, mapped_argument_star)
 
