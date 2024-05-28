@@ -159,7 +159,7 @@ def segmentation_ver2(fn_current, data_orig, npixels_value, th_coeff):
 
 
 
-def segmentation(fn, data_orig, npixels_value=500, th_coeff=0.50):
+def segmentation(fn, data_orig, npixels_value=500, th_coeff=6):
     """
     ### input(s)
     data(2d array, float64): preprocessed int files
@@ -178,20 +178,14 @@ def segmentation(fn, data_orig, npixels_value=500, th_coeff=0.50):
     print(fn_current)
     
     convolved_data = data_orig
-    
-    #kernel = make_2dgaussian_kernel(7.0, size=21)  # FWHM = 7
-    #convolved_data = convolve(data_orig, kernel)
 
     # use sigma-clipped statistics to (roughly) estimate the background
     # background noise levels
-    #mean, _, std = sigma_clipped_stats(data_orig, sigma=10)
     mean, _, std = sigma_clipped_stats(convolved_data)
 
-    #print("numpy std: ", np.nanstd(data_orig))
     print("numpy std: ", np.nanstd(convolved_data))
     
     # subtract the background
-    #data = data_orig - mean
     data = convolved_data - mean
 
     # detect the sources
@@ -201,9 +195,6 @@ def segmentation(fn, data_orig, npixels_value=500, th_coeff=0.50):
     print("threshold: ", threshold)
     print("n_pixels: ", npixels_value)
 
-    #kernel = make_2dgaussian_kernel(7.0, size=21)  # FWHM = 7
-    #convolved_data = convolve(data, kernel)
-    
     segm = detect_sources(
         convolved_data, threshold, npixels=npixels_value, connectivity=8
     )
@@ -216,21 +207,15 @@ def segmentation(fn, data_orig, npixels_value=500, th_coeff=0.50):
 
     canvas = np.zeros(shape=(len(data), len(data[0])))
     if segm is not None:
-        #cat = SourceCatalog(data_orig, segment_map, convolved_data=convolved_data)
         cat = SourceCatalog(data_orig, segment_map, convolved_data=convolved_data)
         
         # Extract positions(x/ycentroid, flux, and eliptical aperture information),
         columns = ["label", "xcentroid", "ycentroid", "segment_flux", "kron_flux", "kron_aperture"]
         tbl = cat.to_table(columns=columns)
-        # Convert to pandas dataframe 
-
-        #df = tbl.to_pandas()
-        #df_dropped = df[(df["kron_aperture"].a < 500) & (df["kron_aperture"].a < 500)]
 
         norm = simple_norm(data, "sqrt")
         fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(10, 12.5))
         ax1.imshow(data_orig, origin="lower", norm=colors.LogNorm(vmin=1e-4, vmax=1e-2))
-        #ax1.imshow(data_orig, origin="lower", norm=colors.LogNorm(vmin=0.1, vmax=1300))
         ax1.set_title(fn_current, fontsize=14)
         ax2.imshow(np.array(segm), origin="lower", interpolation = None)  #
         ax2.set_title( str(npixels_value) + '_' + str(th_coeff), fontsize=12)
@@ -245,100 +230,33 @@ def segmentation(fn, data_orig, npixels_value=500, th_coeff=0.50):
         for i in range(len(tbl)):
             a, b = tbl["kron_aperture"][i].a, tbl["kron_aperture"][i].b
             ap_size = 1.00
-            
-            if a > 500000 or b > 500000:
-                pass
-            
-            else:
-                aperture = EllipticalAperture(
-                                tbl["kron_aperture"][i].positions,
-                                a=ap_size* tbl["kron_aperture"][i].a,
-                                b=ap_size* tbl["kron_aperture"][i].b,
-                                theta=tbl["kron_aperture"][i].theta,
-                            )
+            aperture = EllipticalAperture(
+                            tbl["kron_aperture"][i].positions,
+                            a=ap_size* tbl["kron_aperture"][i].a,
+                            b=ap_size* tbl["kron_aperture"][i].b,
+                            theta=tbl["kron_aperture"][i].theta,
+                        )
 
-                mask = aperture.to_mask()
-                ap_patches = aperture.plot(color="white", lw=1, ax=ax1)
-                ap_patches = aperture.plot(color="white", lw=1, ax=ax2)
+            mask = aperture.to_mask()
+            ap_patches = aperture.plot(color="white", lw=1, ax=ax1)
+            ap_patches = aperture.plot(color="white", lw=1, ax=ax2)
 
-                subimage = mask
+            subimage = mask
 
-                x, y = (
-                    tbl["kron_aperture"][i].positions[1],
-                    tbl["kron_aperture"][i].positions[0],
-                )
-                width, height = np.shape(mask)[0], np.shape(mask)[1]
+            x, y = (
+                tbl["kron_aperture"][i].positions[1],
+                tbl["kron_aperture"][i].positions[0],
+            )
+            width, height = np.shape(mask)[0], np.shape(mask)[1]
 
-                top_left_x = int(x - (width / 2))
-                top_left_y = int(y - (height / 2))
-                bottom_right_x = top_left_x + width
-                bottom_right_y = top_left_y + height
+            top_left_x = int(x - (width / 2))
+            top_left_y = int(y - (height / 2))
+            bottom_right_x = top_left_x + width
+            bottom_right_y = top_left_y + height
 
-                canvas[top_left_x:bottom_right_x, top_left_y:bottom_right_y] = mask
+            canvas[top_left_x:bottom_right_x, top_left_y:bottom_right_y] = mask
 
-            final_mask += canvas
-            
-        ''' 
-        for i in range(len(tbl)):
-            if tbl['segment_flux'][i] > 900:
-                a, b = tbl["kron_aperture"][i].a, tbl["kron_aperture"][i].b
-
-                #if tbl["kron_aperture"][i].a < 500 or tbl["kron_aperture"][i].b < 500:
-                if a < 200 and b < 200:
-                    if tbl['segment_flux'][i] < 100000:
-                        ap_size = 1.5
-                        print("Flux ", tbl['segment_flux'][i], "aperture size ", ap_size)
-                    elif tbl['segment_flux'][i] > 100000:
-                        ap_size = 2.5
-                        print("Flux ", tbl['segment_flux'][i], "aperture size ", ap_size)
-
-                    aperture = EllipticalAperture(
-                        tbl["kron_aperture"][i].positions,
-                        a=ap_size* tbl["kron_aperture"][i].a,
-                        b=ap_size*1.5* tbl["kron_aperture"][i].b,
-                        theta=tbl["kron_aperture"][i].theta,
-                    )
-
-                    print(
-                    "original a & b: ", tbl["kron_aperture"][i].a, tbl["kron_aperture"][i].b
-                )
-                    print(
-                    "enlarged a & b: ", ap_size *tbl["kron_aperture"][i].a, ap_size * tbl["kron_aperture"][i].b
-                )
-
-                    mask = aperture.to_mask()
-                    ap_patches = aperture.plot(color="white", lw=1, ax=ax1)
-                    ap_patches = aperture.plot(color="white", lw=1, ax=ax2)
-
-                    subimage = mask
-
-                    x, y = (
-                        tbl["kron_aperture"][i].positions[1],
-                        tbl["kron_aperture"][i].positions[0],
-                    )
-                    width, height = np.shape(mask)[0], np.shape(mask)[1]
-
-                    top_left_x = int(x - (width / 2))
-                    top_left_y = int(y - (height / 2))
-                    bottom_right_x = top_left_x + width
-                    bottom_right_y = top_left_y + height
-
-                    canvas[top_left_x:bottom_right_x, top_left_y:bottom_right_y] = mask
-
-                    final_mask += canvas
- 
-
-    #if counter == 0:
-    #    final_mask = canvas
-    
-    elif segm is None:
-        final_mask = canvas
- 
-
-    #final_mask[np.isnan(data_orig)] = 0    
-    final_mask[np.isnan(convolved_data)] = 0    
-    
-    '''
+        final_mask += canvas
         
     elif segm is None:
         final_mask = canvas
@@ -383,11 +301,6 @@ def poisson_noise(cnt, rrhr, mask, skybg):
     #plt.title("skybg * rrhr")
     #plt.colorbar()
     
-    # Feed background values from skybg and generate poisson distribution
-
-    #nanarry = np.where(np.isnan(segmented_bg))
-    #print("mask values; ", mask[nanarry[0], nanarry[1]])
-    #print("data values; ", data[nanarry[0], nanarry[1]])    
     
     # Drop nans by replacing with 0s
     segmented_bg[np.isnan(segmented_bg)] = 0
