@@ -17,4 +17,4 @@ CurrentCoordinates="$( sed "${SLURM_ARRAY_TASK_ID}q;d" /xdisk/hamden/hina0830/ve
 time python3 query.py --pair-list $CurrentCoordinates
 time python3 preprocessing.py --pair-list $CurrentCoordinates
 #time python3 object_detection.py --pair-list $CurrentCoordinates
-#time python3 montage.py
+#time python3 montage.py --pair-list $CurrentCoordinates
