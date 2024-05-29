@@ -123,7 +123,7 @@ def reproject(file_tuple):
     print(np.shape(array))
     
     print(fn_flags.removesuffix('.fits') + '_wcs.fits', " reprojected and saved. ")
-    fits.writeto(fn_flags.removesuffix('.fits') + '_wcs_ver2.fits', array, hdu1.header, overwrite=True)
+    fits.writeto(fn_flags.removesuffix('.fits') + '_wcs.fits', array, hdu1.header, overwrite=True)
     
     return array
 
