@@ -97,6 +97,7 @@ print("New location: ", os.getcwd())
 def segmtantion(file_tuple):
     # Unpack the tuple and get lists of file names
     cnt_file, rrhr_file, skybg_file, int_file, flags_file = file_tuple
+    print("segmentation running at: ", cnt_file)
 
     # Read all the files and get data
     cnt_data, rrhr_data, skybg_data, int_data, flags_data = (
@@ -139,10 +140,10 @@ def segmtantion(file_tuple):
     # int_data[flags_data  >= 256] = np.nans
 
     mask = ps.segmentation(fn_current, int_data, npixels_value, th_coeff)  # Perform segmentations on large sources
-    print("segmentation finished")
+    print("segmentation finished for ", cnt_file)
 
     cnt_noise = ps.poisson_noise(cnt_data, rrhr_data, mask, skybg_data)  # Perform Poisson infill
-    print("poisson infill finished ")
+    print("poisson infill finished for ", cnt_file)
 
     # Trim each side (empty pixels) of the array by the edge_thickness (=500pix)
     cnt_infilled_trimmed = cnt_noise[edge_thickness:len(cnt_noise)-edge_thickness, edge_thickness:len(cnt_noise[0])-edge_thickness]
@@ -151,7 +152,7 @@ def segmtantion(file_tuple):
     
     # Apply Gaussian filter and clean the edges (cleaning)
     final_cnt = cl.combined(sigma=sigma, radius=radius, data=cnt_infilled_trimmed)
-    print("cl.combined finished")
+    print("cl.combined finished for ", cnt_file)
 
     # Flag the infilled image
     final_cnt[flags_trimmed >= 256] = np.nan
@@ -159,7 +160,7 @@ def segmtantion(file_tuple):
     # Save the new files
     hdu[0].data = final_cnt
     hdu.writeto(cnt_file.removesuffix("_preprocessed.fits") + "_Pinfilled_trimmed.fits", overwrite=True)
-    print(f"Processing completed for {cnt_file}")
+    print(f"new file saved for {cnt_file}")
 
     hdu[0].data = rrhr_trimmed
     hdu.writeto(rrhr_file.removesuffix(".fits") + "_trimmed.fits", overwrite=True)
@@ -168,6 +169,7 @@ def segmtantion(file_tuple):
 
 def starfinder_new(file_tuple):
     cnt_file, int_file, flags_file, rrhr_file = file_tuple
+    print("star finder running at: ", cnt_file)
 
     edge_thickness = 500  # Trim 500 (blank) pixels on each side
     mask_size = 16  # size of mask for each star in pixels
@@ -193,8 +195,11 @@ def starfinder_new(file_tuple):
 
     # Run the point source finder and extract masked image, mask, and a list of coordinates
     masked_data, mask_data, coord_lis = ps.psfinder(divided_data, flags_data, th_coeff, DAO_fwhm, mask_size)
+    print("point source finder completed for ", cnt_file)
 
     # --- Save files here ---
+    
+    cnt_file_int = cnt_file.replace('cnt', 'int')
     
     with open( cnt_file_int.removesuffix('Pinfilled_trimmed.fits') + str(len(coord_lis)) + '_coord.pkl', "wb") as f:
         pickle.dump(coord_lis,f)
@@ -235,6 +240,8 @@ if __name__ == "__main__":
         if len(fn_cnt) == len(fn_rrhr)  == len(fn_skybg) == len(fn_skybg) == len(fn_flags):
             print(len(fn_cnt), "files per each")
             output = p.map(segmtantion, mapped_argument)
+        else:
+            print("Error: some files are missing!")
 
         fn_cnt_infilled, fn_int, fn_flags, fn_rrhr_trimmed = (
             sorted(glob("*-cnt_Pinfilled_trimmed.fits")),
@@ -250,3 +257,6 @@ if __name__ == "__main__":
         if len(fn_cnt_infilled) == len(fn_int) == len(fn_flags) == len(fn_rrhr_trimmed):
             print(len(fn_cnt_infilled), "files per each")
             output = p.map(starfinder_new, mapped_argument_star)
+        else:
+            print("Error: some files are missing!")
+           
