@@ -38,7 +38,8 @@ Then activate the virtual environment (source venv/bin/activate).
 To run the program, clone this repository by running the following command:
 
 ```
-git clone dev https://github.com/hina0830g/GALEX_montage.git
+git clone --branch dev https://github.com/hina0830g/GALEX_montage.git
+
 ```
 
 <h2 align="center"> Getting Started </h2>

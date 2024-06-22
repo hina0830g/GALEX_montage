@@ -24,6 +24,9 @@ home_dir = "/xdisk/hamden/hina0830/venv39"
 #### Input
 # The radius should be consistent with the radius in prior codes
 radius = int(1400)
+area_circle = np.pi * (radius ** 2)
+artifacts_cutoff = 20
+edge_thickness = 500
 
 num_cpus = int(os.environ["SLURM_CPUS_ON_NODE"])
 print("Running a pool with %s workers" % num_cpus)
@@ -65,7 +68,7 @@ if args.pair_list:
     except FileNotFoundError:
         print("Error")
 
-#os.chdir("2024-04-21-RA195-DEC21")
+#os.chdir("2024-05-16-RA10-DEC41")
 print("New location: ", os.getcwd())
 
 def make_mask(data):
@@ -86,7 +89,10 @@ def make_mask(data):
 
 
 def process_file(filename):
-    print("Processing: ", filename)
+    # drop the negative pixels in rrhr and int.fits bty replacing them with nans
+    # and apply a Gaussian smoothing filter to inte
+    
+    print("Process_file at: ", filename)
     # Open the file and convert the data type
     hdu = fits.open(filename)
     data = (hdu[0].data).astype("float64")
@@ -105,6 +111,9 @@ def process_file(filename):
     # Replace the outer pixels with nans
     mask = make_mask(data)
     data[mask] = np.nan
+    
+    # Trim 500 blank pixels from each side
+    data = data[edge_thickness:len(data)-edge_thickness, edge_thickness:len(data[0])-edge_thickness]
 
     # Save the file
     hdu[0].data = data
@@ -113,35 +122,65 @@ def process_file(filename):
 
     return data
 
-def reproject(file_tuple):
-    fn_cnt, fn_flags = file_tuple
-    print("Processing: ", fn_cnt, fn_flags)
-    hdu1 = fits.open(fn_cnt)[0]
-    hdu2 = fits.open(fn_flags)[0] # flag, 480 by 480
-    
-    array, footprint = reproject_interp(hdu2, hdu1.header, order = "nearest-neighbor")  # reproject flag file to cnt (3840 by 3840) # order = " reproject_interp "
-    print(np.shape(array))
-    
-    print(fn_flags.removesuffix('.fits') + '_wcs.fits', " reprojected and saved. ")
-    fits.writeto(fn_flags.removesuffix('.fits') + '_wcs.fits', array, hdu1.header, overwrite=True)
-    
-    return array
+def preprocess(file_tuple):
+    print("Processing tuple ", file_tuple)
+    cnt_file, rrhr_file, int_file, skybg_file, flags_file = file_tuple
 
+    cnt_data, rrhr_data, int_data, skybg_data, flags_data = (
+        fits.getdata(cnt_file).astype("float64"),
+        fits.getdata(rrhr_file).astype("float64"),
+        fits.getdata(int_file).astype("float64"),
+        fits.getdata(skybg_file).astype("float64"),
+        fits.getdata(flags_file).astype("float64"))
+    
+    hdu1 = fits.open(cnt_file)[0]
+    hdu2 = fits.open(flags_file)[0] # flag, 480 by 480
+    
+    flags_data, footprint = reproject_interp(hdu2, hdu1.header, order = "nearest-neighbor") 
+    flag_largeval = np.where(flags_data < 128, 0 , flags_data)
+    nonzero_pix = np.count_nonzero(flag_largeval)
+    artifacts_frac = (nonzero_pix / area_circle) * 100
+    
+    print("frac: " + (f"{artifacts_frac:.2f}") + "%")
+    
+    # Preprocess the files only if fraction of the flagged pixels is above our cutoff value 
+    if artifacts_frac < artifacts_cutoff:
+        prerocessed_cnt = process_file(cnt_file)
+        prerocessed_rrhr = process_file(rrhr_file)
+        prerocessed_int = process_file(int_file)
+        
+        flags_data = flags_data[edge_thickness:len(flags_data)-edge_thickness, edge_thickness:len(flags_data[0])-edge_thickness]
+        
+        # Save reprojected flags
+        fits.writeto(flags_file.removesuffix('.fits') + '_wcs.fits', flags_data, hdu1.header, overwrite=True)
+        print(flags_file.removesuffix('.fits') + '_wcs.fits', " reprojected and saved. ")
+        
+        hdu = fits.open(skybg_file)
+        
+        skybg_data = skybg_data[edge_thickness:len(skybg_data)-edge_thickness, edge_thickness:len(skybg_data[0])-edge_thickness]
+        hdu[0].data = skybg_data
+        hdu.writeto(skybg_file, overwrite=True)
+        
+    else:
+        print(cnt_file.removesuffix('.fits') + " discarded at " + (f"{artifacts_frac:.2f}") + "%")
+        os.remove(skybg_file)
 
 if __name__ == "__main__":
     with Pool(num_cpus) as p:
-        # Retrieves each type of files in the directory
-        fn = sorted(glob("*cnt.fits")) + sorted(glob("*rrhr.fits")) + sorted(glob("*int.fits"))
-        print("nans filename: ", fn)
-        # Nan the outside
-        output = p.map(process_file, fn)
+        fn_cnt, fn_rrhr, fn_int, fn_skybg, fn_flags = (
+            sorted(glob("*-cnt.fits")),
+            sorted(glob("*rrhr.fits")),
+            sorted(glob("*int.fits")),
+            sorted(glob("*skybg.fits")),
+            sorted(glob("*flags.fits")),
+        )
         
-        fn_reproject =  sorted(glob("*cnt.fits")) + sorted(glob("*flags.fits"))
+        mapped_new = list(zip(fn_cnt, fn_rrhr, fn_int, fn_skybg, fn_flags)) 
+        if len(fn_cnt) == len(fn_rrhr) == len(fn_int) == len(fn_skybg) == len(fn_flags):
         
-        mapped_argument_reproject = list(zip(sorted(glob("*cnt.fits")), sorted(glob("*flags.fits"))))
-        
-        print("mapped_argument_reproject: ", mapped_argument_reproject)
-        # Reproject flag files
-        output_reproject = p.map(reproject, mapped_argument_reproject)
-        
+            print("mapped_new: ", mapped_new)
+            print(len(mapped_new), "files total.")
+
+            output = p.map(preprocess, mapped_new)
+
         
