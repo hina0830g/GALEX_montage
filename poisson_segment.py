@@ -195,18 +195,12 @@ def segmentation(fn, data_orig, npixels_value=500, th_coeff=6):
     print("threshold: ", threshold)
     print("n_pixels: ", npixels_value)
 
-    segm = detect_sources(
-        convolved_data, threshold, npixels=npixels_value, connectivity=8
-    )
-    
-    print("segm: ", segm)
-    print(type(segm))
-    print("detect_sources done.")
     finder = SourceFinder(npixels=npixels_value, progress_bar=False, deblend=False)
-    segment_map = finder(convolved_data, threshold= threshold)
+    segment_map = finder(convolved_data, threshold=threshold)
+    print("detect_sources done.")
 
     canvas = np.zeros(shape=(len(data), len(data[0])))
-    if segm is not None:
+    if segment_map is not None:
         cat = SourceCatalog(data_orig, segment_map, convolved_data=convolved_data)
         
         # Extract positions(x/ycentroid, flux, and eliptical aperture information),
@@ -217,19 +211,19 @@ def segmentation(fn, data_orig, npixels_value=500, th_coeff=6):
         fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(10, 12.5))
         ax1.imshow(data_orig, origin="lower", norm=colors.LogNorm(vmin=1e-4, vmax=1e-2))
         ax1.set_title(fn_current, fontsize=14)
-        ax2.imshow(np.array(segm), origin="lower", interpolation = None)  #
+        ax2.imshow(np.array(segment_map), origin="lower", interpolation = None)  #
         ax2.set_title( str(npixels_value) + '_' + str(th_coeff), fontsize=12)
-        
-        #hdu[0].data = segm
-        #hdu.writeto("/xdisk/hamden/hina0830/venv39/raw_files/2024-01-11-RA195-DEC21/" + "NGA_M51-fd-segm_color.fits", overwrite=True)
-        
-        final_mask = segm
 
-        mask_only = np.zeros(segm.shape)
+        final_mask = canvas 
         
         for i in range(len(tbl)):
+            
+            # Empty canvas for individual sources
+            canvas_source = np.zeros(shape=(len(data), len(data[0])))
+
             a, b = tbl["kron_aperture"][i].a, tbl["kron_aperture"][i].b
-            ap_size = 1.00
+            ap_size = 1.25
+            
             aperture = EllipticalAperture(
                             tbl["kron_aperture"][i].positions,
                             a=ap_size* tbl["kron_aperture"][i].a,
@@ -241,7 +235,6 @@ def segmentation(fn, data_orig, npixels_value=500, th_coeff=6):
             ap_patches = aperture.plot(color="white", lw=1, ax=ax1)
             ap_patches = aperture.plot(color="white", lw=1, ax=ax2)
 
-            subimage = mask
 
             x, y = (
                 tbl["kron_aperture"][i].positions[1],
@@ -253,18 +246,79 @@ def segmentation(fn, data_orig, npixels_value=500, th_coeff=6):
             top_left_y = int(y - (height / 2))
             bottom_right_x = top_left_x + width
             bottom_right_y = top_left_y + height
+            
+            try:
+                canvas_source[top_left_x:bottom_right_x, top_left_y:bottom_right_y] = mask
+                canvas += canvas_source
 
-            canvas[top_left_x:bottom_right_x, top_left_y:bottom_right_y] = mask
+            except ValueError:
+                print("--- !!! VALUE ERROR WARNING !!! ---")
+                print(top_left_x, top_left_y, bottom_right_x, bottom_right_y)
 
-        final_mask += canvas
+                top_left_x_new, top_left_y_new, bottom_right_x_new, bottom_right_y_new = max(0, min(top_left_x, 2840)), max(0, min(top_left_y, 2840)), max(0, min(bottom_right_x, 2840)), max(0, min(bottom_right_y, 2840))
+                print("new values: ", top_left_x_new, top_left_y_new, bottom_right_x_new, bottom_right_y_new)
+
+                top_left_x_diff = top_left_x - top_left_x_new
+                top_left_y_diff = top_left_y - top_left_y_new
+                bottom_right_x_diff = bottom_right_x - bottom_right_x_new
+                bottom_right_y_diff = bottom_right_y - bottom_right_y_new
+
+                trimmed_mask  = mask.data
+                
+                if top_left_x_diff != 0: 
+                    #print("top_left_x_diff: ", top_left_x_diff)
+                    trimmed_mask = trimmed_mask[abs(top_left_x_diff):, :] # Bottom cut
+
+                    #fig, ax = plt.subplots()
+                    #plt.imshow(trimmed_mask, origin="lower")
+                    #plt.title("mask") 
+                    #plt.colorbar()
+
+                if top_left_y_diff != 0:
+                    #print("top_left_y_diff: ", top_left_y_diff)
+                    trimmed_mask = trimmed_mask[:, abs(top_left_y_diff):] # Left cut 
+
+                    #fig, ax = plt.subplots()
+                    #plt.imshow(trimmed_mask, origin="lower")
+                    #plt.title("mask") 
+                    #plt.colorbar()
+
+                if bottom_right_x_diff != 0:
+                    #print("bottom_right_x_diff: ", bottom_right_x_diff)
+                    trimmed_mask = trimmed_mask[:-abs(bottom_right_x_diff), :] # Top cut
+
+                    #fig, ax = plt.subplots()
+                    #plt.imshow(trimmed_mask, origin="lower")
+                    #plt.title("mask") 
+                    #plt.colorbar()
+
+                if bottom_right_y_diff != 0:
+                    #print("bottom_right_y_diff: ", bottom_right_y_diff)
+                    trimmed_mask = trimmed_mask[:, :-abs(bottom_right_y_diff)] # Right cut
+                    #fig, ax = plt.subplots()
+                    #plt.imshow(trimmed_mask, origin="lower")
+                    #plt.title("mask") 
+                    #plt.colorbar()
+
+
+                canvas_source[top_left_x_new:bottom_right_x_new, top_left_y_new:bottom_right_y_new] = trimmed_mask
+                #canvas = np.where(canvas == 0, np.nan, canvas) 
+
+                #fig, ax = plt.subplots()
+                #plt.imshow(canvas_source, origin="lower")
+                #plt.title("canvas_source") 
+                #plt.colorbar()
+
+                canvas += canvas_source
+
+        final_mask = canvas
         
     elif segm is None:
         final_mask = canvas
         print("No extended sourced detected.")
-        
-    final_mask[np.isnan(convolved_data)] = 0  
 
-    bool_mask = np.where(final_mask != 0, 1, final_mask)
+    bool_mask = np.where(final_mask != 0, 1, final_mask) # make the mask 0s and 1s
+    
     fig, ax = plt.subplots()
     plt.imshow(bool_mask, origin="lower")
     plt.title("final mask, aperture + segment")
@@ -288,19 +342,9 @@ def poisson_noise(cnt, rrhr, mask, skybg):
     """
 
     data = skybg * rrhr  # New pixels for the segmented regions
+    print("isnide the poisson_noise: ", np.shape(skybg), np.shape(rrhr))
 
     segmented_bg = np.where(mask == 0, 0, data)  # remove outside the segments
-    
-    #fig, ax = plt.subplots()
-    #plt.imshow(segmented_bg, origin="lower")#, norm=colors.LogNorm(vmin=0.1, vmax=1300))
-    #plt.title("segment_bg")
-    #plt.colorbar()
-    
-    #fig, ax = plt.subplots()
-    #plt.imshow(data, origin="lower")#, norm=colors.LogNorm(vmin=0.1, vmax=1300))
-    #plt.title("skybg * rrhr")
-    #plt.colorbar()
-    
     
     # Drop nans by replacing with 0s
     segmented_bg[np.isnan(segmented_bg)] = 0
