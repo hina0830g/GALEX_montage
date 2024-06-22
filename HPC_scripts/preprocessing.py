@@ -156,14 +156,16 @@ def preprocess(file_tuple):
         print(flags_file.removesuffix('.fits') + '_wcs.fits', " reprojected and saved. ")
         
         hdu = fits.open(skybg_file)
-        
+        print("preprocessing.py, before trimming. ", np.shape(skybg_data))
         skybg_data = skybg_data[edge_thickness:len(skybg_data)-edge_thickness, edge_thickness:len(skybg_data[0])-edge_thickness]
+        print("preprocessing.py, after trimming. ", np.shape(skybg_data))
+        
         hdu[0].data = skybg_data
-        hdu.writeto(skybg_file, overwrite=True)
+        hdu.writeto(skybg_file.removesuffix(".fits") + "_preprocessed.fits", overwrite=True)
         
     else:
         print(cnt_file.removesuffix('.fits') + " discarded at " + (f"{artifacts_frac:.2f}") + "%")
-        os.remove(skybg_file)
+        #os.remove(skybg_file)
 
 if __name__ == "__main__":
     with Pool(num_cpus) as p:
