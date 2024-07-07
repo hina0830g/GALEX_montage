@@ -17,12 +17,41 @@ using Plots
 using Pickle
 using Glob
 
-path_init = "/xdisk/hamden/hina0830/venv39/raw_files/2024-05-15-RA180-DEC12" 
-coord_fn, out_fn, bimage_fn, orig_fn = sort(glob("*_coord.pkl", path_init), rev=false), sort(glob("*_masked.fits", path_init), rev=false), sort(glob("*_mask.fits", path_init), rev=false), sort(glob("*-int_Pinfilled_trimmed.fits", path_init), rev=false)
+home_dir = "/xdisk/hamden/hina0830/venv39"
+
+println("ARGS: ", ARGS) # Get the command line argument; first arguement is array job number and second argument is the path to the input file
+
+# Get the first argument
+index = parse(Int, ARGS[1]) + 1 # Get the index (=array) number. This number corresponds to the row in the input file. Add 1 since coded in Julia. 
+
+# Get the second argument
+inputfile_path = ARGS[2]
+
+
+# Function that reads the input file
+function read_and_split_file(filename)
+    split_lines = []
+    open(filename, "r") do file
+        for line in eachline(file)
+            push!(split_lines, split(line)) # Get 4 integers in the line and add them to the list
+        end
+    end
+    return split_lines
+end
+
+# Read the line in the input file and get values (batch#, index#, RA, and DEC)
+result = read_and_split_file(inputfile_path)[index]
+
+Batch, Index, RA, DEC = result[1], result[2], result[3], result[4] # Define batch#, index#, RA, and DEC
+foldername = "/Batch_" * Batch * "/Index" * Index * "-RA" * RA * "-DEC" * DEC 
+path_init = home_dir * "/raw_files_newformat" * foldername
+println("path_init: ", path_init)
+
+coord_fn, out_fn, bimage_fn, orig_fn = sort(glob("*_coord.pkl", path_init), rev=false), sort(glob("*_masked.fits", path_init), rev=false), sort(glob("*_mask.fits", path_init), rev=false), sort(glob("*-int_Pinfilled.fits", path_init), rev=false)
 println(length(coord_fn))
 
 cd(path_init)
-
+println("path changed", pwd())
 
 # Function to print thread ID
 function thread_print(string)
@@ -62,7 +91,7 @@ function thread_print(string)
     rlim = 20^2
 
     ndraw0 = 1
-    widx = 700 
+    widx = 600 
 
     # Run the infilling algorithm 
     star_stats = proc_discrete(x_locs.+1 , y_locs.+1 , out_image, bimage_bool, Np=Np, rlim=Inf, tilex=8, ftype=64, widx=widx, seed=2022, ndraw=ndraw0);
