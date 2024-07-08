@@ -117,12 +117,6 @@ In every step, flags.fits files are used in order to flag artifacts (=bad pixels
 - [**pointsource_infill.jl**](https://github.com/hina0830g/GALEX_montage/blob/dev/HPC_scripts/pointsource_infill.jl)
 This code uses a Julia infill package CloudClean to fill in point sources and artifact pixels that were flagged in the previous step.
 
-- [**post processing.py**](https://github.com/hina0830g/GALEX_montage/blob/dev/HPC_scripts/)
-This code cleans the output images of point_source_infill.jl. It eliminates any undesired pixels outside of the actual images and transfers the files.
-
 - [**montage.py**](https://github.com/hina0830g/GALEX_montage/blob/dev/HPC_scripts/montage.py)  
 This code combines all the processed images to create a large mosaic. The primary function it uses is the coadd function from MontagePy and takes the mean for the regions where images overlap. The mosaic is saved as uncorrect.fits.
-
-- [**Cleaning.py**](https://github.com/hina0830g/GALEX_montage/blob/dev/cleaning.py)  
-A module for cleaning and smoothing the data. nan_outside replaces all the pixels outside a radius with nan in an image (2d array). gaussian_filter_2d applies a 2d Gaussian filter to an image to smooth it out. Combined performs both; gaussian filter first and cleans the edges using nan_outside.
 
