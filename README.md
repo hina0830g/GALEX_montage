@@ -18,6 +18,19 @@ This is a Python & Julia based astronomical image processing project, paralleliz
 Images are queried from [*GALEX sky survey archive*](https://archive.stsci.edu/missions-and-data/galex) using astropy MAST query in Python. The types of files queried are the following: cnt.fits, rrhr.fits, skybg.fits, int.fits, and flags.fits.
 
 
+**Data Products used**
+
+
+| Filename | Units | size | Description |
+| :---: | --- | ------- | --- |
+| fd-cnt.fits | counts/pixel | 3840 x 3840 | The raw number of counts per pixel, not corrected for the exposure time or flat field |
+| fd-rrhr.fits| seconds | 3840 x 3840 | The high resolution relative response. This is the rr image linearly interpolated to the same pixel scale as the cnt map. |
+|fd-int.fits| counts/sec/pixel |  3840 x 3840 | Intensity map (cnt / rrhr) |
+| fd-skybg.fits | counts/sec/pixel |  3840 x 3840 | The sky background map subtracted from the data before identifying sources. |
+| fd-flags.fits | flag value |  480 x 480 | Flag map indicating regions of the map likely contaminated by artifacts or regions where various types of artifacts have been removed. This file type needs to be reprojected in order to match the dimension to other files (preprocessing.fits) |
+
+Reference: GALEX Chapter 4 - [Imamging Data Products](http://www.galex.caltech.edu/researcher/techdoc-ch4.html)
+
 <h2 align="center"> Installation </h2>
 
 **Requirements**
