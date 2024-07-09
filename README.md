@@ -18,6 +18,19 @@ This is a Python & Julia based astronomical image processing project, paralleliz
 Images are queried from [*GALEX sky survey archive*](https://archive.stsci.edu/missions-and-data/galex) using astropy MAST query in Python. The types of files queried are the following: cnt.fits, rrhr.fits, skybg.fits, int.fits, and flags.fits.
 
 
+**Data Products used**
+
+
+| Filename | Units | size | Description |
+| :---: | --- | ------- | --- |
+| fd-cnt.fits | counts/pixel | 3840 x 3840 | The raw number of counts per pixel, not corrected for the exposure time or flat field |
+| fd-rrhr.fits| seconds | 3840 x 3840 | The high resolution relative response. This is the rr image linearly interpolated to the same pixel scale as the cnt map. |
+|fd-int.fits| counts/sec/pixel |  3840 x 3840 | Intensity map (cnt / rrhr) |
+| fd-skybg.fits | counts/sec/pixel |  3840 x 3840 | The sky background map subtracted from the data before identifying sources. |
+| fd-flags.fits | flag value |  480 x 480 | Flag map indicating regions of the map likely contaminated by artifacts or regions where various types of artifacts have been removed. This file type needs to be reprojected in order to match the dimension to other files (preprocessing.fits) |
+
+Reference: GALEX Chapter 4 - [Imamging Data Products](http://www.galex.caltech.edu/researcher/techdoc-ch4.html)
+
 <h2 align="center"> Installation </h2>
 
 **Requirements**
@@ -104,12 +117,6 @@ In every step, flags.fits files are used in order to flag artifacts (=bad pixels
 - [**pointsource_infill.jl**](https://github.com/hina0830g/GALEX_montage/blob/dev/HPC_scripts/pointsource_infill.jl)
 This code uses a Julia infill package CloudClean to fill in point sources and artifact pixels that were flagged in the previous step.
 
-- [**post processing.py**](https://github.com/hina0830g/GALEX_montage/blob/dev/HPC_scripts/)
-This code cleans the output images of point_source_infill.jl. It eliminates any undesired pixels outside of the actual images and transfers the files.
-
 - [**montage.py**](https://github.com/hina0830g/GALEX_montage/blob/dev/HPC_scripts/montage.py)  
 This code combines all the processed images to create a large mosaic. The primary function it uses is the coadd function from MontagePy and takes the mean for the regions where images overlap. The mosaic is saved as uncorrect.fits.
-
-- [**Cleaning.py**](https://github.com/hina0830g/GALEX_montage/blob/dev/cleaning.py)  
-A module for cleaning and smoothing the data. nan_outside replaces all the pixels outside a radius with nan in an image (2d array). gaussian_filter_2d applies a 2d Gaussian filter to an image to smooth it out. Combined performs both; gaussian filter first and cleans the edges using nan_outside.
 
