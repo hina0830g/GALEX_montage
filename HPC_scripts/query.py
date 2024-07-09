@@ -15,9 +15,9 @@ from sh import gunzip
 
 home_dir = '/xdisk/hamden/hina0830/venv39'
 
-# Input here:
-r = 4.0
-project_lis = ['AIS','NGS','DIS','MIS'] 
+### Input parameters ### 
+r = 0.5 # Search radius for query
+project_lis = ['AIS','NGS', 'MIS', 'DIS']  # list of GALEX surveys
 
 # Swicth to the raw file directory
 path_init = home_dir  + '/raw_files'
@@ -29,73 +29,137 @@ print("Today's date:", today)
 
 # Create an ArgumentParser object
 parser = argparse.ArgumentParser()
-
-# Add an argument for the list of directory and filename pairs
-# nargs='+' indicates that the argument can take one or more values
 parser.add_argument('--pair-list', nargs=2, type=str, help='Pair of integers (int1 int2)')
-
-# Parse the command-line arguments
 args = parser.parse_args()
 
-# Use the list of directory and filename pairs in your script
+print(args)
+
 if args.pair_list:
-    # Split a pair into a directory and a filename
-    RA, DEC = map(int, args.pair_list)
-    print("RA:", RA)
-    print("DEC:", DEC)
+    RA, DEC = map(int, args.pair_list) # Get RA and DEC from the input file
+    print("RA & DEC :", RA, " , " , DEC)
     try:
-        # Specify the coordinates using the input information
+        # Define the sky coordinates & directory name using the input information
         c = SkyCoord(ra=RA*u.degree, dec=DEC*u.degree, frame='icrs')
         dir_name = str(today) + "-RA" + str(RA) + "-DEC" + str(DEC)
         
         # Create a new directory under raw_files
         os.makedirs(dir_name, exist_ok=True)
         
-        # Switch to the new directory where files
-        # will be downloaded
+        # Switch to the new directory where files will be downloaded
         path_new = path_init + '/' + dir_name
         os.chdir( path_new )
-        
-        print("directory name:", path_new)
+ 
     except FileNotFoundError:
         print("Error")
- 
+        
 
 def coord_query(coord, radius, project):
-    # Runs GALEX coordinate query 
+    """
+    Criteria based astropy query. 
+    Criteria: coordinate, obs_collection ( = GALEX ), project ( AIS, MIS, DIS, NGS ), filter ( = FUV ), file
+
+    Parameters
+    ----------
+    coord : astropy.coordinates.sky_coordinate.SkyCoord
+        The desired coordinate, RA & DEC in degrees, (center) of query.
+    radius : float
+        The desired radius for query.
+    project : list 
+        The desired GALEX Science Surveys (e.g., ["AIS", "MIS"]).
+
+    Returns
+    -------
+    DataProduct_final : Pandas DataFrame
+        The table of files found via query.
+
+    Description
+    -----------
+    This function performs criteria based astropy query. 
+    It returns a catalog of files, allowing you to extract and download files
+    in the next function (download_dp).
+    
+    """
+    
+    # Run GALEX coordinate query 
     result_table = Observations.query_criteria(coordinates=c, obs_collection='GALEX', radius=r*u.degree, project=project_lis, filters=["*FUV"])
     obsid = result_table['obsid']
     print(len(obsid), "obsids available")
     data_products = Observations.get_product_list(obsid)
     data_products =  data_products.to_pandas()
     
-    # Only keeps the fd files;
+    # Only keep the -fd (FUV) files and toss the -nd (NUV) files;
     data_products = data_products[(data_products['productFilename'].str.contains('-fd'))]
     DataProduct_final = data_products[
     ((data_products['productFilename'].str.contains('_00' + r'\d{1}' + r'\d{1}' + '-' )) == False) &
     ((data_products['productFilename'].str.contains('_00' + r'\d{1}' + r'\d{1}' + '_' )) == False) &
-    (data_products['productFilename'].str.endswith(('-cnt.fits.gz', '-rrhr.fits.gz', '-skybg.fits.gz', '-int.fits.gz', 'flags.fits.gz')))
+    (data_products['productFilename'].str.endswith(('-cnt.fits.gz', '-rrhr.fits.gz', '-int.fits.gz', '-skybg.fits.gz', 'flags.fits.gz')))
     ]    
-
-    print(len(DataProduct_final), 'files total per type available to download')
+    print(int(len(DataProduct_final))/5, 'files total per type available to download')
     print(DataProduct_final['productFilename'])    
 
     return DataProduct_final
 
 def download_dp(data_products):
+    """
+    Download files. 
+    
+    Parameters
+    ----------
+    data_products : Pandas DataFrame
+        The table of files found via query ( output from coord_query )
+        
+    Returns
+    -------
+    None.
 
-    # Convert data frame back to QTable
-    data_products = QTable.from_pandas(data_products)
-    # Download selected MIS files
-    manifest = Observations.download_products(data_products)
+    Description
+    -----------
+    This function takes a catalog from query and downloads the files
+    inside the folders "mastDownload/GALEX" 
+    
+    (e.g., raw_files/2024-07-08-RA195-DEC25/mastDownload/GALEX/6378621151228198912/AIS_219_sg17-fd-int.fits.gz ).
+    
+    """   
+
+    data_products = QTable.from_pandas(data_products) # Convert data frame back to QTable
+    manifest = Observations.download_products(data_products) # Download the files
     print("Installed: " , data_products['productFilename'])
-    print(data_products['project'])
-    return path_new
+    
+    return None
 
 def move_files(path_new):
+    """
+    organizes folders and files obtained from download_dp.
+    
+    Parameters
+    ----------
+    path_new : str
+        The path to the working directory for this coordinate
+
+    Returns
+    -------
+    None.
+
+    Description
+    -----------
+    1. This function transfers the downloaded files located in
+    directories " mastDownload/GALEX " to our default directory 
+    and removes the empty parent directories afterward. 
+    
+    2. This function also gunzips the files ( fits.gz -> .fits ).
+    
+    Example
+    -----------
+    Before:
+    raw_files/2024-07-08-RA195-DEC25/mastDownload/GALEX/6378621151228198912/AIS_219_sg17-fd-int.fits.gz
+    
+    After:
+    raw_files/2024-07-08-RA195-DEC25/AIS_219_sg17-fd-int.fits
+    
+    """
+    
     ext = '/mastDownload/GALEX'
-    os.chdir( path_new + ext)
-    print(os.getcwd())
+    os.chdir( path_new + ext )
     
     current_folder = os.getcwd() 
     list_dir = os.listdir(current_folder)  # All the subdirectories
@@ -107,22 +171,13 @@ def move_files(path_new):
         path = os.path.join(current_folder, val)
         # os.listdir lists all everything (files/dir) in the specified directory
         content_dict [ list_dir[index] ] = os.listdir(path) # Assigns the files as keys in the dictionary 
-    print(content_dict)
     
-    # Distination of the files; default is the newly created directory 
-    merge_folder_path = path_new 
-    
-    # loop through the folders under /mastDownload/GALEX
-    for sub_dir in content_dict:
-    
-        # loop through the contents inside
-        for contents in content_dict[sub_dir]:
-    
-            # make the path of the content to move 
-            file_path = path_new + ext + "/" + sub_dir + "/" + contents
-    
-            # move the file
-            shutil.move(file_path, path_new)
+    merge_folder_path = path_new # Distination of the files; default is the newly created directory 
+   
+    for sub_dir in content_dict: # loop through the sub folders under /mastDownload/GALEX
+        for contents in content_dict[sub_dir]: # iterate through files 
+            file_path = path_new + ext + "/" + sub_dir + "/" + contents # path of the file to move
+            shutil.move(file_path, path_new) # move the file, file_path, to path_new
 
         os.rmdir(sub_dir) # remove the empty subdirectories
     
@@ -130,7 +185,6 @@ def move_files(path_new):
     os.chdir( path_new + '/mastDownload' )
     os.rmdir('GALEX')
     os.chdir( path_new )
-    print(os.getcwd())
     os.rmdir('mastDownload') 
     
     merge_folder_path = path_new
@@ -149,15 +203,12 @@ def move_files(path_new):
         except:
             print('already exists')
             
-    return file
+    return None
 
 
 if __name__=="__main__":
     # Run query & extract data product
     DataProduct_final = coord_query(c, r, project_lis)
-    # Download the files
-    path_new = download_dp(DataProduct_final)
-        
-    # Organize the files
-    output = move_files( path_new )
+    download_dp( DataProduct_final ) # Download the files
+    move_files( path_new ) # Organize the files
 
