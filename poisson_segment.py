@@ -24,177 +24,59 @@ import pickle
 from astropy.table import QTable
 import gc
 
-# radius is around 1250 for GALEX data
-def zeros_outside(radius, data):
-    """
-    ### input(s)
-    radius: radius of the circle (round 1400 for GALEX data).
-    pixels outside of this circle will be 
-    replaced with 0s
-
-    data: raw image (2d array) to be cleaned
-
-    ### output(s)
-    data: cleaned data
-    """
-
-    # Create a grid of coordinates that match the dimension of the image
-    x, y = np.arange(0, len(data)), np.arange(0, len(data))
-    x_grid, y_grid = np.meshgrid(x, y)
-
-    ## Calculate distances for all pixels at once
-
-    # Find the center of the image in x and y
-    x_cent, y_cent = int(round(len(data) / 2)), int(round(len(data) / 2))
-    # Distance formula
-    distances = np.sqrt((x_cent - x_grid) ** 2 + (y_cent - y_grid) ** 2)
-    # Create a mask for pixels outside the circle
-    mask = distances > radius
-    # Apply the mask ( masked pixels = nan )
-    print("r = ", radius, ", cleaned.")
-    data[mask] = 0
-
-    return data
-
-def segmentation_ver2(fn_current, data_orig, npixels_value, th_coeff):
-    """
-    ### input(s)
-    
-    fn_current(string): name of the file for labeling purposes
-    
-    data_orig(2d array, float64): preprocessed (convolved) intensity file; a Guassian filter has been applied
-
-    npixel_value(int64): number of pixels connected. Default = 10,000 for large objects
-
-    th_coeff(float64): coefficient for determing the threshold of pixel value for detection.
-    threshold is determined by this vlaue * standard diviation of the image
-
-    ### output(s)
-    bool_mask(0s and 1s): segmented mask. 0 = no mask, 1 = mask
-
-    """ 
-    
-    convolved_data = data_orig # preprocessed intensity file is already convolved.
-
-    # use sigma-clipped statistics to (roughly) estimate the background
-    # background noise levels
-    mean, _, std = sigma_clipped_stats(convolved_data)
-
-    print("numpy std: ", np.nanstd(convolved_data))
-    
-    # subtract the background
-    data = convolved_data - mean
-
-    # detect the sources
-    threshold = th_coeff * std 
-    
-    print("standard dev: ", std)
-    print("threshold: ", threshold)
-    print("n_pixels: ", npixels_value)
-
-    segm = detect_sources(
-        convolved_data, threshold, npixels=npixels_value, connectivity=8
-    )
-    
-    
-    print("segm: ", segm)
-    print(type(segm))
-    print("detect_sources done.")
-    finder = SourceFinder(npixels=npixels_value, progress_bar=False, deblend=False)
-    segment_map = finder(convolved_data, threshold= threshold)
-    canvas = np.zeros(shape=(len(convolved_data), len(convolved_data[0])))
-    
-    fig, ax = plt.subplots()
-    plt.imshow(data_orig, origin="lower", norm=colors.LogNorm(vmin=1e-4, vmax=1e-2))
-    plt.title(fn_current + '_' + str(npixels_value) + '_' + str(th_coeff)) 
-    plt.colorbar()
-    
-    if segm is not None:
-        cat = SourceCatalog(data_orig, segment_map, convolved_data=convolved_data)
-
-        # Extract positions(x/ycentroid, flux, and eliptical aperture information),
-        columns = ["label", "xcentroid", "ycentroid", "segment_flux", "kron_flux", "kron_aperture", "semimajor_sigma", "semiminor_sigma", "orientation"]
-
-        tbl = cat.to_table(columns=columns)
-
-        mask_shape = data_orig.shape
-        mask = np.zeros(mask_shape, dtype=bool)
-
-        # Loop over ellipses and draw them onto the mask
-        for i in range(len(tbl)):
-            ellipse = Ellipse((tbl['xcentroid'][i], tbl['ycentroid'][i]), 
-                              width=12.5 * tbl['semimajor_sigma'][i].value,  
-                              height=12.5 * tbl['semiminor_sigma'][i].value, 
-                              angle=tbl['orientation'][i].value, edgecolor = 'red', facecolor= 'none')
-            print("ellipse: ", ellipse)
-            print("ellipse parameters: ", tbl['xcentroid'][i], tbl['ycentroid'][i], 12.5*tbl['semimajor_sigma'][i].value, 12.5*tbl['semiminor_sigma'][i].value, tbl['orientation'][i].value)
-            
-            # Convert the ellipse into a binary mask
-            x, y = ellipse.get_verts().T
-            x_min, x_max = int(x.min()), int(x.max())
-            y_min, y_max = int(y.min()), int(y.max())
-            xx, yy = np.meshgrid(np.arange(x_min, x_max), np.arange(y_min, y_max))
-            ellipse_mask = ellipse.contains_points(np.vstack((xx.flatten(), yy.flatten())).T).reshape((y_max-y_min, x_max-x_min))
-
-            # Get the bounding box of the ellipse in the original image coordinates
-            x0, y0 = max(0, int(tbl['xcentroid'][i] - 0.5 * ellipse.width)), max(0, int(tbl['ycentroid'][i] - 0.5 * ellipse.height))
-            x1, y1 = min(mask_shape[1], x0 + ellipse_mask.shape[1]), min(mask_shape[0], y0 + ellipse_mask.shape[0])
-
-            # Add the ellipse mask to the main mask
-            mask[y0:y1, x0:x1] += ellipse_mask[:y1-y0, :x1-x0]
-            ax.add_artist(ellipse)
-            
-    elif segm is None:
-        mask = canvas
-        print("No extended sourced detected.")
-        
-    fig, ax = plt.subplots()
-    plt.imshow(mask, origin="lower")
-    plt.title("generated mask") 
-    plt.colorbar()
-    plt.show()
-
-    gc.collect()
-    return mask
-
-
+# Scaling factor for EllipticalAperture. 2 * kron radius should cover > 90% of the flux (Kron et al 1980).
+ap_size = 2.00
 
 def segmentation(fn, data_orig, npixels_value=500, th_coeff=6):
+    
     """
-    ### input(s)
-    data(2d array, float64): preprocessed int files
+    Detects large sources ( extended sources and galaxies ) in an image and 
+    determiens the regions to be be infilled.
+    
+    Parameters
+    ----------
+    fn : str
+         filename of the image. Only used for labeling. 
+        
+    data_orig : numpy array (float 64)
+        The image to perform segmentation on. It should be 
+        intesity file that has been preprocessed (convolved).
+    
+    npixels_value : int
+        The minimum number of connected pixels in order to be
+        detedcted as a segment.
+    
+    th_coeff : float
+        Used to determine the minimum value of pixels in order to be detected as a segment.
+        The threshold is th_coeff * std of the image
 
-    npixel_value(int64): number of pixels connected. Default = 10,000 for large objects
+    Returns
+    -------
+    bool_mask : numpy array ( bool )
+        The boolean mask generated via segmentation. 
+        Indicates the regions where large sources are detected.
+        0 = not masked, 1 = masked
 
-    th_coeff(float64): coefficient for determing the threshold of pixel value for detection.
-    threshold is determined by this vlaue * standard diviation of the image
-
-    ### output(s)
-    bool_mask(0s and 1s): segmented mask. 0 = no mask, 1 = mask
-
-    """
-    #hdu = fits.open(fn)
+    Description
+    -----------
+    This functions detects large sources and creates a mask for
+    detected regions. The detection process is through segmentation, 
+    which segments regions that have a minimum number of connected pixels
+    above our threhsold value.
+    
+    """  
+    
     fn_current = fn.removesuffix('-cnt_nan.fits')
     print(fn_current)
     
-    convolved_data = data_orig
+    convolved_data = data_orig # preprocessed, thus already convolved.
 
-    # use sigma-clipped statistics to (roughly) estimate the background
-    # background noise levels
-    mean, _, std = sigma_clipped_stats(convolved_data)
+    mean, _, std = sigma_clipped_stats(convolved_data) # use sigma-clipped statistics to (roughly) estimate the background noise levels
+    data = convolved_data - mean # subtract the background
 
-    print("numpy std: ", np.nanstd(convolved_data))
-    
-    # subtract the background
-    data = convolved_data - mean
+    threshold = th_coeff * std  # Defines the threhsold for segmentation
 
-    # detect the sources
-    threshold = th_coeff * std 
-    
-    print("standard dev: ", std)
-    print("threshold: ", threshold)
-    print("n_pixels: ", npixels_value)
-
+    # Performs segmentation 
     finder = SourceFinder(npixels=npixels_value, progress_bar=False, deblend=False)
     segment_map = finder(convolved_data, threshold=threshold)
     print("detect_sources done.")
@@ -211,7 +93,7 @@ def segmentation(fn, data_orig, npixels_value=500, th_coeff=6):
         fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(10, 12.5))
         ax1.imshow(data_orig, origin="lower", norm=colors.LogNorm(vmin=1e-4, vmax=1e-2))
         ax1.set_title(fn_current, fontsize=14)
-        ax2.imshow(np.array(segment_map), origin="lower", interpolation = None)  #
+        ax2.imshow(np.array(segment_map), origin="lower", interpolation = None)  
         ax2.set_title( str(npixels_value) + '_' + str(th_coeff), fontsize=12)
 
         final_mask = canvas 
@@ -222,7 +104,6 @@ def segmentation(fn, data_orig, npixels_value=500, th_coeff=6):
             canvas_source = np.zeros(shape=(len(data), len(data[0])))
 
             a, b = tbl["kron_aperture"][i].a, tbl["kron_aperture"][i].b
-            ap_size = 1.25
             
             aperture = EllipticalAperture(
                             tbl["kron_aperture"][i].positions,
@@ -266,54 +147,23 @@ def segmentation(fn, data_orig, npixels_value=500, th_coeff=6):
                 trimmed_mask  = mask.data
                 
                 if top_left_x_diff != 0: 
-                    #print("top_left_x_diff: ", top_left_x_diff)
                     trimmed_mask = trimmed_mask[abs(top_left_x_diff):, :] # Bottom cut
 
-                    #fig, ax = plt.subplots()
-                    #plt.imshow(trimmed_mask, origin="lower")
-                    #plt.title("mask") 
-                    #plt.colorbar()
-
                 if top_left_y_diff != 0:
-                    #print("top_left_y_diff: ", top_left_y_diff)
                     trimmed_mask = trimmed_mask[:, abs(top_left_y_diff):] # Left cut 
 
-                    #fig, ax = plt.subplots()
-                    #plt.imshow(trimmed_mask, origin="lower")
-                    #plt.title("mask") 
-                    #plt.colorbar()
-
                 if bottom_right_x_diff != 0:
-                    #print("bottom_right_x_diff: ", bottom_right_x_diff)
                     trimmed_mask = trimmed_mask[:-abs(bottom_right_x_diff), :] # Top cut
 
-                    #fig, ax = plt.subplots()
-                    #plt.imshow(trimmed_mask, origin="lower")
-                    #plt.title("mask") 
-                    #plt.colorbar()
-
                 if bottom_right_y_diff != 0:
-                    #print("bottom_right_y_diff: ", bottom_right_y_diff)
                     trimmed_mask = trimmed_mask[:, :-abs(bottom_right_y_diff)] # Right cut
-                    #fig, ax = plt.subplots()
-                    #plt.imshow(trimmed_mask, origin="lower")
-                    #plt.title("mask") 
-                    #plt.colorbar()
-
 
                 canvas_source[top_left_x_new:bottom_right_x_new, top_left_y_new:bottom_right_y_new] = trimmed_mask
-                #canvas = np.where(canvas == 0, np.nan, canvas) 
-
-                #fig, ax = plt.subplots()
-                #plt.imshow(canvas_source, origin="lower")
-                #plt.title("canvas_source") 
-                #plt.colorbar()
-
                 canvas += canvas_source
 
         final_mask = canvas
         
-    elif segm is None:
+    elif segment_map is None:
         final_mask = canvas
         print("No extended sourced detected.")
 
@@ -329,31 +179,51 @@ def segmentation(fn, data_orig, npixels_value=500, th_coeff=6):
 
 
 def poisson_noise(cnt, rrhr, mask, skybg):
+
     """
-    ### input(s)
-    cnt(2d array, float64): Nanned cnt files
-
-    mask(2d array, float64): mask generated using segmentation
-
-    skybg(2d array, float64): .objmask.fits obtained from GALEX
-
-    ### output(s)
-    cnt_noise: cnt data, masked and poisson noise added
-    """
-
-    data = skybg * rrhr  # New pixels for the segmented regions
-    print("isnide the poisson_noise: ", np.shape(skybg), np.shape(rrhr))
-
-    segmented_bg = np.where(mask == 0, 0, data)  # remove outside the segments
+    Poisson infills the segmented regions and 
+    removes the large sources.
     
-    # Drop nans by replacing with 0s
+    Parameters
+    ----------
+    cnt : numpy array (float 64)
+        The preprocessed cnt file 
+        
+    rrhr : numpy array (float 64)
+        The preprocessed rrhr file 
+        
+    mask : numpy array (float 64)
+        The mask generated from segmentation
+        
+    skybg : numpy array (float 64)
+        The preprocessed skybg file 
+
+    Returns
+    -------
+    bool_mask : numpy array ( bool )
+        The boolean mask generated via segmentation. 
+        Indicates the regions where large sources are detected.
+        0 = not masked, 1 = masked
+
+    Description
+    -----------
+    This functions generates Poisson noise from the background 
+    for the masked regins ( where large soures are ).
+    """  
+ 
+    # Define the sampple data to draw Poisson distribution 
+    data = skybg * rrhr  # background * rrhr so it's in counts
+    
+    # Clean the sample data. Set unmaksed regions and nans to be 0
+    segmented_bg = np.where(mask == 0, 0, data)  
     segmented_bg[np.isnan(segmented_bg)] = 0
-    # Exclude (unmask) pixels where the data has nans
+
     segmented_bg[np.isnan(data)] = 0
  
+    # Draw Poisson distrubtion here
     noise_added = np.random.poisson(lam=segmented_bg)
 
-    # Replace the pixels in cnt with the generated noise
+    # Now fill in the large souces with drawn data ( Poisson noise )
     cnt_noise = np.where(segmented_bg != 0, noise_added, cnt)
     
     fig, ax = plt.subplots()
@@ -366,29 +236,62 @@ def poisson_noise(cnt, rrhr, mask, skybg):
     return cnt_noise
 
 def psfinder(divided_data, flags_data, th_coeff, DAO_fwhm, mask_size):
-    
     """
-    ### input(s)
-    divided_data(2d array, float64): flagged intensity image 
+    Detect the point sources ( stars ) in the image via DAOStarFinder
+    and artifacts in flags via segmentation.
     
-    flags_data(2d array, float64): wcs transformed flag image
-    
-    th_coeff(float64): coefficient for determing the threshold of pixel value for star finder/2D gaussian fit
-    threshold is determined by this vlaue * standard diviation of the image
-    
-    DAO_fwhm(int64): the target value of fwhm (full width half maxima) for star finder/2D gaussian fit
-    
-    mask_size(int64): the radius of a mask for each point source
+    Parameters
+    ----------
+    divided_data : numpy array (float 64)
+        Poinsson infilled cnt data divided by preprocessed rrhr.
+        
+    flags_data : numpy array (float 64)
+        The preprocessed skybg file.
+        
+    th_coeff : int
+        This value * std of the image is the threshold 
+        for source detection.
+        
+    DAO_fwhm : int
+        The full-width half maximum of the major axis of
+        the Gaussian kernel in units of pixels.
+        
+    mask_size : int
+        The radius ( in pixel ) of individual mask for each point source
+        The default = 16 pix. Determined from the instrument sigma 
+        and the kernel size from Gaussian filter
 
-    ### output(s)
-    bool_mask(0s and 1s): segmented mask. 0 = no mask, 1 = mask
+    Returns
+    -------
+    masked_data : numpy array ( float 64 )
+        Boolean mask generated via segmentation. 
+        Indicates the regions where large sources are detected.
+        0 = not masked, 1 = masked
+        
+    mask_data : numpy array ( bool )
+        Boolean mask where 0 = not masked, 
+        1 = masked
+        
+    coord_lis : list
+        list of coordinates (x, y) of the detected sources.
 
-    """
+    Description
+    -----------
+    1. This functions runs DAOStarFinder on the image to detect 
+    and mask point sources.
+    
+    2. This function runs segmentation on the flags file to detect
+    approximate centers of flagged regions and also flags the image.
+    
+    3. This functions stores the coordinates of point sources from 1 
+    and flagged regions from 2 in a list ( coord_lis ). 
+    
+    """      
+    
     # Determine the standard dev.
     mean, median, std = sigma_clipped_stats(divided_data)  
-    print((mean, median, std)) 
     
-    daofind = DAOStarFinder(fwhm=DAO_fwhm, threshold=th_coeff*std) # fwhm=3.0, 3.0*std 
+    daofind = DAOStarFinder(fwhm=DAO_fwhm, threshold=th_coeff*std) 
     sources = daofind(divided_data - median)
 
     positions = np.transpose((sources['xcentroid'], sources['ycentroid']))
@@ -398,33 +301,26 @@ def psfinder(divided_data, flags_data, th_coeff, DAO_fwhm, mask_size):
     # Define custom radii for the stars 
     star_radii = np.ones(len(sources)) * mask_size
 
-    # Mask stars by replacing pixels with 0s
     mask_data = np.copy(divided_data)
 
-    # create an epmty array, same size as the image
+    # create an epmty array, same size as the image; 
     canvas = np.zeros(shape=(divided_data.shape[0], divided_data.shape[1]))
 
     y_indices, x_indices = np.indices(divided_data.shape)
     x_cent, y_cent = int(round(len(divided_data) / 2)), int(round(len(divided_data) / 2))
     coord_lis = []
     
+    # Loop over detected sources and calculate the distance from the center
     for star, radius in zip(sources, star_radii):
         x, y = int(star['xcentroid']), int(star['ycentroid'])
-
-        # Distances between the star and every pixel in the image
-        dist = np.sqrt((x_indices - x) ** 2 + (y_indices - y) ** 2) 
-
-        # Find the distance between the center of the image and the star
         star_dist = np.sqrt((x_cent - x) ** 2 + (y_cent - y) ** 2)
 
-        # Ignore the stars near the edge (outside the inner radius)
+         # Store the coordinate and mask the point source 
+         # if the distance is less than 1400 ( the boundary of the circle )
         if star_dist <= 1400: 
-            # fill in the pixel around the star and mask the star in the image and the mask
-            # the size of masking for each star is mask_size defined at the top
-            # masking the image; masked region = 0
             mask_data[dist <= radius] = 0
 
-            # mask file; masked = 1 and nonmasked = 0
+            # mask the star; masked = 1 and nonmasked = 0
             canvas[dist <= radius] = 1
 
             coord = [x, y]
@@ -448,46 +344,36 @@ def psfinder(divided_data, flags_data, th_coeff, DAO_fwhm, mask_size):
     ### Parameters below are fixed to detect artifacts
     npixels_value_wcs = 25
     threshold_wcs = 50
-    
-    segm = detect_sources(
-    flags_data, threshold=threshold_wcs, npixels=npixels_value_wcs, connectivity=8
-    )
-    
+
     finder = SourceFinder(npixels=npixels_value_wcs, progress_bar=False, deblend=False)
     segment_map = finder(flags_data, threshold=threshold_wcs)
 
     canvas = np.zeros(shape=(len(flags_data), len(flags_data[0])))
 
-    if segm is not None:
+    if segment_map is not None:
         cat = SourceCatalog(flags_data, segment_map)
 
-        # Extract positions(x/ycentroid, flux, and eliptical aperture information),
+        # Specify columns to extract 
         columns = ["label", "xcentroid", "ycentroid", "semimajor_sigma", "semiminor_sigma"]
 
         tbl = cat.to_table(columns=columns)
-
-        # Assuming tbl is your QTable, you can convert it to a DataFrame if needed
         df = tbl.to_pandas()
 
-        # Find the index of the row with the largest value of "semimajor_sigma"
+        # Drop the sources with semimajor axis larger than 50 since we don't want to infill the "dents"
         indices_to_drop = df[df['semimajor_sigma'] > 50].index
-
-        # Drop the row using the index
         df.drop(indices_to_drop, inplace=True)
 
-        # Convert back to QTable if needed
         tbl_new = QTable.from_pandas(df)
 
         mask_shape = flags_data.shape
         mask = np.zeros(mask_shape, dtype=bool)
 
-        # Loop over ellipses and draw them onto the mask
+        # Loop over detected sources and calculate the distance from the center
         for i in range(len(tbl_new)):
             x, y = int(tbl_new['xcentroid'][i]), int(tbl_new['ycentroid'][i])
-            # Find the distance between the center of the image and the star
             star_dist = np.sqrt((x_cent - x) ** 2 + (y_cent - y) ** 2)
-
-            if star_dist < 1400: # Save the coordinates if the coordinates are inside the circle
+            
+            if star_dist < 1400: # Store the coordinate if the distance is less than 1400 ( the boundary of the circle )
                 coord = [int(tbl_new['xcentroid'][i]), int(tbl_new['ycentroid'][i])]
                 coord_lis.append(coord)
     
