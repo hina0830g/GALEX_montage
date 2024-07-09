@@ -10,16 +10,28 @@ import pandas as pd
 # radius is around 1250 for GALEX data
 def nan_outside(radius, data):
     """
-    ### input(s)
-    radius: radius of the circle (round 1250 for GALEX data).
-    pixels outside of this circle will be cleaned and
-    replaced with nan for faster processing
+    Replace all pixels outside of the bounds of the circle
+    with numpy Nans.
+    
+    Parameters
+    ----------
+    radius : int
+        The radius of the bounds of the circe 
+        
+    data : numpy array (float 64)
+        The image to be edited
+        
+    Returns
+    -------
+    data : numpy array (float 64)
+        The final image (edited)
 
-    data: raw image (2d array) to be cleaned
-
-    ### output(s)
-    data: smoothed/filtered image
-    """
+    Description
+    -----------
+    This function cleans an image by defining a radius 
+    and replacing outside the boundary with numpy nans.
+    
+    """   
 
     # Create a grid of coordinates that match the dimension of the image
     x, y = np.arange(0, len(data)), np.arange(0, len(data))
@@ -41,17 +53,29 @@ def nan_outside(radius, data):
 
 def zeros_outside(radius, data):
     """
-    ### input(s)
-    radius: radius of the circle (round 1400 for GALEX data).
-    pixels outside of this circle will be 
-    replaced with 0s
+    Replace all pixels outside of the bounds of the circle
+    with 0s.
+    
+    Parameters
+    ----------
+    radius : int
+        The radius of the bounds of the circe 
+        
+    data : numpy array (float 64)
+        The image to be edited
+        
+    Returns
+    -------
+    data : numpy array (float 64)
+        The final image (edited)
 
-    data: raw image (2d array) to be cleaned
-
-    ### output(s)
-    data: cleaned data
-    """
-
+    Description
+    -----------
+    This function cleans an image by defining a radius 
+    and replacing outside the boundary with 0s.
+    
+    """   
+    
     # Create a grid of coordinates that match the dimension of the image
     x, y = np.arange(0, len(data)), np.arange(0, len(data))
     x_grid, y_grid = np.meshgrid(x, y)
@@ -73,21 +97,37 @@ def zeros_outside(radius, data):
 
 def gaussian_filter_2d(sigma, data):
     """
-    ### input(s)
-    sigma: kernel size for the gaussian filter
-    data: raw image (2d array) to be smoothed
+    Replace all pixels outside of the bounds of the circle
+    with 0s.
+    
+    Parameters
+    ----------
+    sigma : float
+         kernel size for the gaussian filter
+        
+    data : numpy array (float 64)
+        The image to be edited
+        
+    Returns
+    -------
+    data : numpy array (float 64)
+        The final image (edited)
 
-    ### output(s)
-    data: smoothed/filtered image
-    """
-
-    gauss_kernel = Gaussian2DKernel(sigma, x_size=75, y_size=75)
+    Description
+    -----------
+    This function cleans an image by defining a radius 
+    and replacing outside the boundary with 0s.
+    
+    """   
+    gauss_kernel = Gaussian2DKernel(sigma, x_size=21, y_size=21)
     data = convolve(data, gauss_kernel)
     print("2D Gaussian filter completed.")
     return data
 
 
 def combined(sigma, radius, data):
+
+    
     """
     ### input(s)
     radius: radius of the circle (round 1250 for GALEX data).
