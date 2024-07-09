@@ -22,14 +22,15 @@ project_lis = ['AIS','NGS', 'MIS', 'DIS']  # list of GALEX surveys
 # Swicth to the raw file directory
 path_init = home_dir  + '/raw_files'
 os.chdir( path_init )
-print('initial path (path_init): ', path_init)
 
 today = date.today()
 print("Today's date:", today)
 
 # Create an ArgumentParser object
 parser = argparse.ArgumentParser()
-parser.add_argument('--pair-list', nargs=2, type=str, help='Pair of integers (int1 int2)')
+parser.add_argument(
+    "--pair-list", nargs=2, type=str, help="Pair of integers (int1 int2)"
+)
 args = parser.parse_args()
 
 print(args)
