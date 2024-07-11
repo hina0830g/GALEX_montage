@@ -29,6 +29,8 @@ Images are queried from [*GALEX sky survey archive*](https://archive.stsci.edu/m
 | fd-skybg.fits | counts/sec/pixel |  3840 x 3840 | The sky background map subtracted from the data before identifying sources. |
 | fd-flags.fits | flag value |  480 x 480 | Flag map indicating regions of the map likely contaminated by artifacts or regions where various types of artifacts have been removed. This file type needs to be reprojected in order to match the dimension to other files (preprocessing.fits) |
 
+Image resolution for GALEX: 4" FWHM
+
 Reference: GALEX Chapter 4 - [Imamging Data Products](http://www.galex.caltech.edu/researcher/techdoc-ch4.html)
 
 <h2 align="center"> Installation </h2>
@@ -73,11 +75,11 @@ Example:
 ```
 This would submit an array job at RA=195, DEC=21 & RA=195, DEC=21. 
 
-- **Open argparse.slurm and change the path to your input file path**     
+- **Specify the path to your input file path in the SLURM file (input_path="/xdisk/hamden/hina0830/venv39/input/coordinates1")**     
 
-CurrentCoordinates="$( sed "${SLURM_ARRAY_TASK_ID}q;d" **/path/to/input** )"
+input_path="/xdisk/hamden/hina0830/venv39/input/coordinates1"
 
-- **Open query.py and preprocessing.py and change the home directory path**    
+- **Specify the home directory path in .py files**    
 
 home_dir = "path/to/your/virtualenvironment"
 
@@ -98,13 +100,21 @@ import cleaning as cl
 <h2 align="center"> Codes </h2>
 
 - [**argparse.slurm**](https://github.com/hina0830g/GALEX_montage/blob/dev/HPC_scripts/argparse.slurm)  
-SLURM script for submitting an array job in the following order: query.py -> preprocessing.py -> object_detection.py
+SLURM script for submitting an array job in the following order: query.py -> preprocessing.py -> object_detection.py -> pointsource_infill.jl -> query.py
 
 - [**query.py**](https://github.com/hina0830g/GALEX_montage/blob/dev/HPC_scripts/query.py)  
 This code reads an input file (a list of coordinates) and performs a criteria-based query at each coordinate. A new directory is created for each coordinate, and all the downloaded files get transferred to the designated directory.
 
-- [**preprocessing.py**](https://github.com/hina0830g/GALEX_montage/blob/dev/HPC_scripts/preprocessing.py)
-This code preprocesses 3 types of files, cnt.fits, rrhr.fits, and int.fits. 0s in all files are replaced with Nans to speed up the future calculation. These pixels are found outside the r~1400 [pix] of the images. Negative pixels in rrhr and int files also get replaced with Nans. Finally, a Gaussian filter is applied to int.fits files to smooth out the images before running segmentation. The default parameters for the Gaussian filter is fwhm=7 and kernel size=21 pixels.
+- [**preprocessing.py**](https://github.com/hina0830g/GALEX_montage/blob/dev/HPC_scripts/preprocessing.py)  
+This code uses the flags files to determine the quality of the observation. If more than 20% of the image is contaminated ( above 127 in flags.fits ) preprocesses the following types of files, cnt.fits, rrhr.fits, int.fits, skybg.fits, and flags.fits.
+
+| File type | execution |
+| :---: | --- |
+| cnt.fits |  Replace the pixels outside of the circle with Numpy Nans. Cut 500 blank pixels from each side so 3840 x 3840 -> 2840 x 2840 |
+| rrhr.fits |  Replace negative values with Numpy Nans. Cut 500 blank pixels from each side. |
+| int.fits | Replace negative values with Numpy Nans. Apply a Gaussian smoothing filter (parameters: fwhm=7 & kernel size=21 in pixels). Cut 500 blank pixels from each side. |
+| skybg.fits | Cut 500 blank pixels from each side of the image. |
+| flags.fits | Reproject and resize the file to be 480 x 480 -> 3840 x 3840. Cut 500 blank pixels from each side.  |
 
 - [**object_detection.py**](https://github.com/hina0830g/GALEX_montage/blob/dev/HPC_scripts/object_detection.py) 
 The primary purposes of this code are to:
@@ -118,5 +128,5 @@ In every step, flags.fits files are used in order to flag artifacts (=bad pixels
 This code uses a Julia infill package CloudClean to fill in point sources and artifact pixels that were flagged in the previous step.
 
 - [**montage.py**](https://github.com/hina0830g/GALEX_montage/blob/dev/HPC_scripts/montage.py)  
-This code combines all the processed images to create a large mosaic. The primary function it uses is the coadd function from MontagePy and takes the mean for the regions where images overlap. The mosaic is saved as uncorrect.fits.
+This code combines all the processed images to create a large mosaic. The primary function it uses is the coadd function from MontagePy and takes the mean for the regions where images overlap. The mosaic is saved as uncorrected.fits.
 
