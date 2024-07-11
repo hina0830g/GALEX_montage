@@ -35,7 +35,6 @@ path_init = home_dir + "/raw_files"
 os.chdir(path_init)
 
 today = date.today()
-print("Today's date:", today)
 
 # Create an ArgumentParser object
 parser = argparse.ArgumentParser()

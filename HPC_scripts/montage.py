@@ -18,30 +18,25 @@ sys.path.append("/xdisk/hamden/hina0830/venv39/")
 import cleaning as cl
 
 home_dir = "/xdisk/hamden/hina0830/venv39"
+
 num_cpus=int(os.environ["SLURM_CPUS_ON_NODE"])
 print("Running a pool with %s workers"%num_cpus)
 
+# Swicth to the raw file directory
 os.chdir(home_dir + "/raw_files")
-print("current path: ", os.getcwd())
+
 today = date.today()
-print("Today's date:", today)
 
 # Create an ArgumentParser object
 parser = argparse.ArgumentParser()
-
-# Add an argument for the list of directory and filename pairs
-# nargs='+' indicates that the argument can take one or more values
-parser.add_argument('--pair-list', nargs=2, type=str, help='Pair of integers (int1 int2)')
-
-# Parse the command-line arguments
+parser.add_argument(
+    "--pair-list", nargs=2, type=str, help="Pair of integers (int1 int2)"
+)
 args = parser.parse_args()
 
-# Use the list of directory and filename pairs in your script
 if args.pair_list:
-    # Split a pair into a directory and a filename
     RA, DEC = map(int, args.pair_list)
-    print("RA:", RA)
-    print("DEC:", DEC)
+    print("RA & DEC :", RA, " , " , DEC)
     c = SkyCoord(ra=RA*u.degree, dec=DEC*u.degree, frame='icrs')
     
     try:
@@ -53,26 +48,11 @@ if args.pair_list:
         
     except FileNotFoundError:
         print("Error")
-        
-else:
-    # Switch to the new directory
-    dir_name = "2024-05-15-RA180-DEC12" # Manually enter a path
-
-    # Get coordinates from the directory name
-    i = dir_name.find("RA") # Find the starting position of "RA"
-    RA_string, DEC_string = astronomy_string[i:].split('-')
-    RA, DEC = int(RA_string.removeprefix("RA")), int(DEC_string.removeprefix("DEC"))
-    
-    c = SkyCoord(ra=RA*u.degree, dec=DEC*u.degree, frame='icrs')
-    
-    os.chdir(dir_name)
-    path_init = os.getcwd()
-    print("Path changed to: ", os.getcwd())
     
 home = os.getcwd()
 
 # Clean the edge of draw.fits and save them using headers from intensity files
-draw_files, int_files = sorted(glob("*draw.fits")), sorted(glob("*-int_Pinfilled_trimmed.fits"))
+draw_files, int_files = sorted(glob("*draw.fits")), sorted(glob("*-int_Pinfilled.fits"))
 print(len(draw_files), len(int_files))
 
 os.makedirs("raw", exist_ok=True)
@@ -91,14 +71,13 @@ for i in range(len(draw_files)):
     overwrite=True,
 )
 
-
 os.chdir( path_init )
 
 # These are the parameters defining the mosaic we want to make
 location = c.to_string('hmsdms')
-size     = 8.0
+size     = 8.0 # in degrees. The output image will be this value^2 [deg^2] 
 dataset  = "GALEX"
-workdir  = dir_name # where raw directory is locat$
+workdir  = dir_name # where raw directory is located
 
 # We create and move into a subdirectory in this notebook
 # but we want to come back to the original startup directory
@@ -140,5 +119,6 @@ print("mImgtbl (projected): " + str(rtn), flush=True)
 # Coadd the projected images without background correction.
 # This step is just to illustrate the need for background correction
 # and can be omitted
+
 rtn = mAdd("projected", "pimages.tbl", "region.hdr", "uncorrected.fits", coadd = 0)
 print("mAdd: " + str(rtn), flush=True)

@@ -16,7 +16,7 @@ from sh import gunzip
 home_dir = '/xdisk/hamden/hina0830/venv39'
 
 ### Input parameters ### 
-r = 0.5 # Search radius in degrees for query
+r = 4.0 # Search radius in degrees for query
 project_lis = ['AIS','NGS', 'MIS', 'DIS']  # list of GALEX surveys
 
 # Swicth to the raw file directory
@@ -32,7 +32,6 @@ parser.add_argument(
     "--pair-list", nargs=2, type=str, help="Pair of integers (int1 int2)"
 )
 args = parser.parse_args()
-
 print(args)
 
 if args.pair_list:
