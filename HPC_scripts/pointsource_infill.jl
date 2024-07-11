@@ -22,7 +22,7 @@ home_dir = "/xdisk/hamden/hina0830/venv39"
 println("ARGS: ", ARGS) # Get the command line argument; first arguement is array job number and second argument is the path to the input file
 
 # Get the first argument
-index = parse(Int, ARGS[1]) + 1 # Get the index (=array) number. This number corresponds to the row in the input file. Add 1 since coded in Julia. 
+index = parse(Int, ARGS[1]) # This correponds to the array number, which is index number + 1
 
 # Get the second argument
 inputfile_path = ARGS[2]
@@ -60,21 +60,16 @@ function thread_print(string)
     x_locs = [sub[1] for sub in coords]
     y_locs = [sub[2] for sub in coords]
     println("Tuple set. ", length(x_locs), " stars.")
-    println(coord_fn)
-    println(out_fn)
-    println(bimage_fn)
-    println(orig_fn)
 
-    filename_original = out_fn #orig_fn
+    # Open files 
+    filename_original = out_fn 
     f = FITS(filename_original)
     init_image = read(f[1])
 
-    # mask_data 
     f = FITS(out_fn) 
     out_image = read(f[1])
     close(f)
 
-    # canvas
     f = FITS(bimage_fn) 
     bimage = read(f[1])
     close(f)
@@ -83,7 +78,7 @@ function thread_print(string)
     bimage = [iszero(element) for element in bimage]
     bimage_bool = !=(1).(bimage)
 
-    # Size of the mask
+    # Parameters
     Np = 95
     halfNp = (Np-1)÷2
     dv = halfNp
@@ -95,8 +90,6 @@ function thread_print(string)
 
     # Run the infilling algorithm 
     star_stats = proc_discrete(x_locs.+1 , y_locs.+1 , out_image, bimage_bool, Np=Np, rlim=Inf, tilex=8, ftype=64, widx=widx, seed=2022, ndraw=ndraw0);
-    
-    println("check point 1 (proc_discrete done)")
    
     # Open the original FITS file
     f_original = FITS(filename_original, "r")
@@ -105,8 +98,6 @@ function thread_print(string)
     data = read(f_original[1])
     mean = star_stats[1]
     draw = star_stats[2][:, :, 1]
-    
-    println("check point2 (draw and mean defined)")
 
     # Update the header to reflect the changes in the data
     header = read_header(f_original[1])
@@ -150,6 +141,7 @@ end
 a = zeros(length(coord_fn))
 
 
+# Run the algorithm using multi-threading 
 Threads.@threads for i = 1:length(coord_fn)
     println("iteration $i on thread $(Threads.threadid())")
     a[i] = Threads.threadid()
