@@ -13,10 +13,8 @@ from photutils.segmentation import deblend_sources
 from photutils.segmentation import SourceFinder
 from photutils.segmentation import SourceCatalog
 from astropy.stats import sigma_clipped_stats
-
 from photutils.aperture import EllipticalAperture
 from astropy.coordinates import Angle
-
 from matplotlib.patches import Ellipse
 from photutils.detection import DAOStarFinder
 from photutils.aperture import CircularAperture
@@ -313,11 +311,13 @@ def psfinder(divided_data, flags_data, th_coeff, DAO_fwhm, mask_size):
     # Loop over detected sources and calculate the distance from the center
     for star, radius in zip(sources, star_radii):
         x, y = int(star['xcentroid']), int(star['ycentroid'])
+        dist = np.sqrt((x_indices - x) ** 2 + (y_indices - y) ** 2)
         star_dist = np.sqrt((x_cent - x) ** 2 + (y_cent - y) ** 2)
 
          # Store the coordinate and mask the point source 
          # if the distance is less than 1400 ( the boundary of the circle )
         if star_dist <= 1400: 
+            
             mask_data[dist <= radius] = 0
 
             # mask the star; masked = 1 and nonmasked = 0
@@ -342,8 +342,8 @@ def psfinder(divided_data, flags_data, th_coeff, DAO_fwhm, mask_size):
     ######### Flags segmentation
 
     ### Parameters below are fixed to detect artifacts
-    npixels_value_wcs = 25
-    threshold_wcs = 50
+    npixels_value_wcs = 127
+    threshold_wcs = 1
 
     finder = SourceFinder(npixels=npixels_value_wcs, progress_bar=False, deblend=False)
     segment_map = finder(flags_data, threshold=threshold_wcs)
